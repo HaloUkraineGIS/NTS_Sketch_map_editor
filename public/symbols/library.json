@@ -1,0 +1,345 @@
+{
+  "$schema": "./library.schema.json",
+  "version": 2,
+  "description": "Спільна бібліотека умовних знаків для всіх шарів. Ключ layers — логічні ключі шарів, де знак дозволений (див. LAYER_URLS). Таблиця evidence фільтрує записи layers[]=evidence. Полігональні заливки: marker-grid тайл, крок spacingMm у міліметрах аркуша (сталий на всіх масштабах).",
+  "symbols": [
+    { "code": "EVID_HIDDEN", "name": "Прихований знак (не показувати)", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "hidden": true },
+{ "code": "eo_ap_blast_mine", "name": "Протипіхотна фугасна міна", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Anti-Personnel_Blast_Mine.svg", "color": "#000000" },
+{ "code": "eo_ap_frag_mine", "name": "Протипіхотна осколкова міна", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Anti-Personnel_Fragmentation_Mine.svg", "color": "#000000" },
+{ "code": "eo_ap_bound_frag_mine", "name": "Протипіхотна вистрибуюча осколкова міна", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Anti-Personnel_Bounding_Fragmentation_Mine.svg", "color": "#000000" },
+{ "code": "eo_ap_direct_frag_mine", "name": "Протипіхотна осколкова міна спрямованої дії", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Anti-Personnel_Directional_Fragmentation_Mine.svg", "color": "#000000" },
+{ "code": "eo_av_metal_mine", "name": "Протитранспортна міна в металевому корпусі", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Anti-Vehicle_Metal_Mine.svg", "color": "#000000" },
+{ "code": "eo_av_plastic_mine", "name": "Протитранспортна міна в пластиковому корпусі", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Anti-Vehicle_Plastic_Mine.svg", "color": "#000000" },
+{ "code": "eo_av_unknown_mine", "name": "Протитранспортна міна в корпусі невстановленого типу", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Anti-Vehicle_Unknown_Mine.svg", "color": "#000000" },
+{ "code": "eo_cluster_submunition", "name": "Касетний боєприпас", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Cluster_Submunition.svg", "color": "#000000" },
+{ "code": "eo_incendiary_submunition", "name": "Запалювальний суббоєприпас", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Incendiary_Submunition.svg", "color": "#000000" },
+{ "code": "eo_ied", "name": "Саморобний вибуховий пристрій (СВП)", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Improvised_Explosive_Device_(IED).svg", "color": "#000000" },
+{ "code": "eo_uxo", "name": "Нерозірваний боєприпас (НРБ)", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Unexploded_Ordnance_(UXO).svg", "color": "#000000" },
+{ "code": "eo_axo", "name": "Залишені вибухонебезпечні предмети (ЗВП)", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Abandoned_Ordnance_(AXO).svg", "color": "#000000" },
+{ "code": "eo_signal_mine", "name": "Сигнальна міна", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Signal_Mine.svg", "color": "#000000" },
+{ "code": "eo_saa", "name": "Набої до стрілецької зброї", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/eo/svg/Small_Arms_Ammunition_(SAA).svg", "color": "#000000" },
+   
+{ "code": "ev_tripwire", "name": "Розтяжка", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/evidence/svg/Tripwire.svg", "color": "#6fc211" },
+{ "code": "ev_stake", "name": "Кілок", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/evidence/svg/Stake.svg", "color": "#6fc211" },
+{ "code": "ev_cup_ap_mine", "name": "Стакан протипіхотної вистрибуючої осколкової міни", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/evidence/svg/Cup_of_Anti-Personnel_Bounding_Fragmentation_Mine.svg", "color": "#6fc211" },
+{ "code": "ev_debris_fragment", "name": "Уламки/фрагменти", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/evidence/svg/Debris_Fragment.svg", "color": "#6fc211" },
+{ "code": "ev_mine_hole", "name": "Лунка від міни", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/evidence/svg/Mine_Hole.svg", "color": "#6fc211" },
+{ "code": "ev_location_of_explosion", "name": "Місце вибуху", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/evidence/svg/Location_of_Explosion.svg", "color": "#6fc211" },
+{ "code": "ev_ammunition_destruction_site", "name": "Місце знищення БК", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/evidence/svg/Ammunition_Destruction_Site.svg", "color": "#6fc211" },
+{ "code": "ev_animal_accident", "name": "Місце нещасного випадку з тваринами", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/evidence/svg/Animal_Accident.svg", "color": "#6fc211" },
+{ "code": "ev_human_accident", "name": "Місце нещасного випадку з людьми", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/evidence/svg/Human_Accident.svg", "color": "#6fc211" },
+{ "code": "ev_av_removed_before_nts", "name": "Лінія від протитранспортних мін", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/evidence/svg/AVM Removed.svg", "color": "#6fc211" },
+
+{ "code": "ind_trench", "name": "Окоп", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/Trench.svg", "color": "#000000" },
+{ "code": "ind_dugout", "name": "Бліндаж", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/Dugout.svg", "color": "#000000" },
+{ "code": "ind_carrier", "name": "Касета (носій)", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/Carrier.svg", "color": "#000000" },
+{ "code": "ind_mine_cap", "name": "Кришка від міни", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/Mine Cap.svg", "color": "#000000" },
+{ "code": "ind_tm_carrying_handle_tape", "name": "Ручка для переносу ТМ", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/TM Carrying Handle Tape.svg", "color": "#000000" },
+{ "code": "ind_ozm_coil", "name": "Котушка від ОЗМ", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/OZM Coil.svg", "color": "#000000" },
+{ "code": "ind_stabilising_cup_submunition", "name": "Стакан стабілізатора суббоєприпасу", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/Stabilising Cup of Submunition.svg", "color": "#000000" },
+{ "code": "ind_former_military_position", "name": "Колишня військова позиція/Блокпост", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/Former Military Position Checkpoint.svg", "color": "#000000" },
+{ "code": "ind_vehicle_remains", "name": "Залишки транспортного засобу", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/Vehicle Remains.svg", "color": "#000000" },
+{ "code": "ind_firearm", "name": "Вогнепальна зброя", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/Firearm.svg", "color": "#000000" },
+{ "code": "ind_ammo_box", "name": "Ящик для БК", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/Ammo Box.svg", "color": "#000000" },
+{ "code": "ind_human_remains", "name": "Людські останки", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/human remains.svg", "color": "#000000" },
+{ "code": "ind_broken_tree", "name": "Повалені/пошкоджені дерева", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/broken tree.svg", "color": "#000000" },
+{ "code": "ind_military_remains", "name": "Залишки військової техніки", "geometry": "point", "layers": ["evidence"], "field": "symbol_code", "svg": "symbols/indicator/svg/Military remains.svg", "color": "#000000" },
+
+    {
+      "code": "TOPO_TREE",
+      "name": "Дерево",
+      "geometry": "point",
+      "layers": ["topoPoint"],
+      "field": "symbol_code",
+      "svg": "symbols/topo/tree.svg",
+      "color": "#1e8449"
+    },
+    {
+      "code": "TOPO_WATER_TOWER",
+      "name": "Водонапірна башта",
+      "geometry": "point",
+      "layers": ["topoPoint"],
+      "field": "symbol_code",
+      "svg": "symbols/topo/water_tower.svg",
+      "color": "#000000"
+    },
+     {
+      "code": "TOPO_BUILDING_POINT",
+      "name": "Будівля",
+      "geometry": "point",
+      "layers": ["topoPoint"],
+      "field": "symbol_code",
+      "svg": "symbols/topo/building.svg",
+      "color": "#000000"
+    },
+    {
+      "code": "TOPO_BUSH_POINT",
+      "name": "Чагарник",
+      "geometry": "point",
+      "layers": ["topoPoint"],
+      "field": "symbol_code",
+      "svg": "symbols/topo/Bushes.svg",
+      "color": "#000000"
+    },
+       {
+      "code": "TOPO_BUS_TRAIN_STOP",
+      "name": "Автобусна/Залізнична зупинка",
+      "geometry": "point",
+      "layers": ["topoPoint"],
+      "field": "symbol_code",
+      "svg": "symbols/topo/Bus Train Stop.svg",
+      "color": "#000000"
+    },
+       {
+      "code": "TOPO_ELECTRIC_SUBSTATION",
+      "name": "Електрична підстанція",
+      "geometry": "point",
+      "layers": ["topoPoint"],
+      "field": "symbol_code",
+      "svg": "symbols/topo/electric_substation.svg",
+      "color": "#000000"
+    },
+       {
+      "code": "TOPO_CISTERN",
+      "name": "Люк резервуара/колодязя",
+      "geometry": "point",
+      "layers": ["topoPoint"],
+      "field": "symbol_code",
+      "svg": "symbols/topo/Cistern.svg",
+      "color": "#000000"
+    },
+
+
+
+
+
+
+
+
+{
+      "code": "TOPO_FOREST",
+      "name": "Ліс",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
+      "fill": { "markerSvg": "symbols/topo/forest.svg", "spacingMm": 8, "markerPx": 12, "layout": "grid" }
+    },
+
+    {
+      "code": "TOPO_BUSHES",
+      "name": "Чагарники",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
+      "fill": { "markerSvg": "symbols/topo/Bushes.svg", "spacingMm": 9, "markerPx": 10, "layout": "scatter" }
+    },
+
+        {
+      "code": "TOPO_CULTIVATION",
+      "name": "Оранка",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
+      "fill": { "markerSvg": "symbols/topo/Cultivation.svg", "spacingMm": 9, "markerPx": 10, "layout": "scatter", "scatter": [{ "dx": 0.22, "dy": 0.28, "rotate": 0 }, { "dx": 0.68, "dy": 0.08, "rotate": 0 }, { "dx": 0.4, "dy": 0.72, "rotate": 0 }] }
+    },
+
+{
+      "code": "TOPO_CEMETERY",
+      "name": "Кладовище",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
+      "fill": { "markerSvg": "symbols/topo/cross.svg", "spacingMm": 7, "markerPx": 5 }
+    },
+    {
+      "code": "TOPO_GARDEN",
+      "name": "Сад",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
+      "fill": { "markerSvg": "symbols/topo/garden_dot.svg", "spacingMm": 5, "markerPx": 4, "layout": "grid" }
+    },
+{
+          "code": "TOPO_GRAZING",
+      "name": "Пасовище",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
+      "fill": { "markerSvg": "symbols/topo/grazing.svg", "spacingMm": 8, "markerPx": 7 }
+    },
+    {
+      "code": "TOPO_SWAMP",
+      "name": "Болото",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#2e86c1",
+      "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
+      "fill": { "markerSvg": "symbols/topo/swamp_tuft.svg", "spacingMm": 3, "markerPx": 10 }
+    },
+    {
+      "code": "TOPO_ARABLE",
+      "name": "Рілля",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#7b5b3e",
+      "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
+      "fill": { "markerSvg": "symbols/topo/arable_dot.svg", "spacingMm": 2, "markerPx": 6 }
+    },
+
+    {
+      "code": "TOPO_WATER",
+      "name": "Став/Озеро",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#7cc8f7",
+      "outline": { "color": "#0271b5", "width": 0.5 },
+      "fill": { "color": "#7cc8f7", "opacity": 0.7 }
+    },
+    
+    {
+      "code": "TOPO_POWERLINE",
+      "name": "Лінія електропередач",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "stroke": { "color": "#000000", "width": 0.6, "style": "solid" },
+      "pattern": {
+        "strokes": [{ "color": "#000000", "width": 0.5 }],
+        "markers": [
+          { "shape": "dot", "color": "#000000", "size": 7, "placement": "vertices" }
+        ],
+        "pairedArrows": { "size": 4, "distance": 12, "gap": 3 }
+      }
+    },
+        {
+      "code": "TOPO_FOOTPATH",
+      "name": "Стежка",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#424242",
+      "stroke": { "color": "#424242", "width": 1, "style": "dash" },
+      "pattern": {
+        "strokes": [{ "color": "#424242", "width": 1, "dash": [5, 2] }]
+      }
+    },
+
+           {
+      "code": "TOPO_STREAM",
+      "name": "Річка/Струмок",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#0271b5",
+      "stroke": { "color": "#0271b5", "width": 3, "style": "solid" },
+      "pattern": {
+        "strokes": [{ "color": "#0271b5", "width": 3}]
+      }
+    },
+    {
+      "code": "TOPO_DIRT_ROAD",
+      "name": "Ґрунтова дорога",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#424242",
+      "stroke": { "color": "#424242", "width": 2, "style": "dash" },
+      "pattern": {
+        "strokes": [
+          { "color": "#424242", "width": 1, "dash": [6, 3], "offset": -2 },
+          { "color": "#424242", "width": 1, "dash": [6, 3], "dashOffset": 8, "offset": 2 }
+        ]
+      }
+    },
+    {
+      "code": "TOPO_PAVED_ROAD",
+      "name": "Дорога з твердим покриттям",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#3d3d3d",
+      "stroke": { "color": "#3d3d3d", "width": 3, "style": "solid" },
+      "pattern": {
+        "strokes": [
+          { "color": "#3d3d3d", "width": 0.7, "offset": -3.2 },
+          { "color": "#3d3d3d", "width": 0.7, "offset": 3.2 }
+        ]
+      }
+    },
+    {
+      "code": "TOPO_FENCE",
+      "name": "Огорожа",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#3d3d3d",
+      "stroke": { "color": "#3d3d3d", "width": 1, "style": "solid" },
+      "pattern": {
+        "strokes": [{ "color": "#3d3d3d", "width": 0.7}],
+        "markers": [
+          { "shape": "check-down", "color": "#3d3d3d", "size": 3, "interval": 30 },
+          { "shape": "check-up", "color": "#3d3d3d", "size": 3, "interval": 30, "alongOffset": 15 }
+        ]
+      }
+    },
+    {
+      "code": "TOPO_PIPELINE",
+      "name": "Трубопровід",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#424242",
+      "stroke": { "color": "#424242", "width": 2, "style": "solid" },
+      "pattern": {
+        "strokes": [{ "color": "#424242", "width": 1 }],
+        "markers": [{ "shape": "dot", "color": "#424242", "size": 6, "interval": 30 }]
+      }
+    },
+    {
+      "code": "TOPO_RAILWAY",
+      "name": "Залізниця",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#111111",
+      "stroke": { "color": "#111111", "width": 2, "style": "solid" },
+      "pattern": {
+        "strokes": [{ "color": "#111111", "width": 2.6 }],
+        "markers": [{ "shape": "tick", "color": "#111111", "size": 8, "thickness": 1, "interval": 12 }]
+      }
+    },
+    {
+      "code": "TOPO_WALL",
+      "name": "Мур",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#222222",
+      "stroke": { "color": "#222222", "width": 2, "style": "solid" },
+      "pattern": {
+        "strokes": [
+          { "color": "#222222", "width": 0.6, "offset": -1 },
+          { "color": "#222222", "width": 0.6, "offset": 1 }
+        ],
+        "markers": [{ "shape": "tick", "color": "#222222", "size": 2.4, "thickness": 0.6, "interval": 16 }]
+      }
+    }
+
+  ]
+}

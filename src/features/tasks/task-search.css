@@ -1,0 +1,87 @@
+/* Пошук task_code: поле в стилі сусідніх контролів сайдбара + випадайка збігів. */
+.task-search-box {
+  position: relative;
+}
+
+.task-search-box input {
+  height: 38px;
+  width: 100%;
+  padding: 0 28px 0 12px;
+  border: 1px solid #dce4e8;
+  border-radius: 8px;
+  background: #fff;
+  color: #2d4253;
+  font-size: 11px;
+  outline: none;
+}
+
+.task-search-box input:focus {
+  border-color: #4d9293;
+  box-shadow: 0 0 0 3px #4d92931a;
+}
+
+.task-search-box input:disabled {
+  background: #f4f7f8;
+  color: #8a98a2;
+}
+
+.task-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8a98a2;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.task-clear:hover {
+  background: #e8f1f1;
+  color: #1b5864;
+}
+
+.task-options {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #dce4e8;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px #16304a2e;
+}
+
+.task-option {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #2d4253;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-option.active {
+  background: #eef6f5;
+}
+
+.task-option.selected {
+  font-weight: 700;
+}
+
+.task-empty,
+.task-more {
+  padding: 8px 12px;
+  font-size: 10px;
+  color: #8a98a2;
+}

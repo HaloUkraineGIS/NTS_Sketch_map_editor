@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "description": "Local renderer overrides keyed by service layer and symbol_code. Entry: { layerKey, field, value, geometry: point|line|polygon, label, color?, size?, width?, fillOpacity? }. Renderer override applies client-side only; unknown layers/fields produce a controlled warning in the legend.",
+  "symbols": []
+}

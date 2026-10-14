@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/symbols/library.schema.json",
+  "title": "Symbol library",
+  "description": "Спільна бібліотека умовних знаків. Один запис = один знак. Шаблони Editor, renderer, таблиця evidence і легенда будуються з цього файла автоматично — код правити не треба.",
+  "type": "object",
+  "required": ["version", "symbols"],
+  "properties": {
+    "version": { "type": "integer" },
+    "description": { "type": "string" },
+    "symbols": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "name"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Значення symbol_code, що пишеться в атрибут. Латиниця/цифри/підкреслення.",
+            "pattern": "^[A-Za-z0-9_]+$"
+          },
+          "name": { "type": "string", "description": "Назва для шаблонів, таблиці і легенди." },
+          "geometry": {
+            "type": "string",
+            "enum": ["point", "line", "polygon"],
+            "default": "point"
+          },
+          "layers": {
+            "type": "array",
+            "description": "Логічні ключі шарів, де знак дозволений.",
+            "items": {
+              "type": "string",
+              "enum": ["task", "evidence", "taskGeopoint", "taskPolygon", "polygonGeopoint", "topoPoint", "topoLines", "topoPolygons", "imsmaPolygons"]
+            },
+            "minItems": 1
+          },
+          "field": {
+            "type": "string",
+            "description": "Атрибут із кодом (дефолт symbol_code).",
+            "default": "symbol_code"
+          },
+          "svg": {
+            "type": "string",
+            "description": "SVG-знак: для точок — маркер 48×48, для ліній — горизонтальна смуга-зразок. Шлях від base, прозорий фон."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Прихований знак: на карті прозорий, у легенді пропускається. SVG не потрібен."
+          },
+          "color": { "type": "string", "description": "Запасний колір / колір превʼю." },
+          "outline": {
+            "type": "object",
+            "description": "Контур полігона.",
+            "properties": {
+              "color": { "type": "string" },
+              "width": { "type": "number" },
+              "style": { "type": "string", "enum": ["solid", "dash", "dot", "dash-dot"] }
+            }
+          },
+          "stroke": {
+            "type": "object",
+            "description": "Лінійний знак.",
+            "properties": {
+              "color": { "type": "string" },
+              "width": { "type": "number" },
+              "style": { "type": "string", "enum": ["solid", "dash", "dot", "dash-dot"] }
+            }
+          },
+          "pattern": {
+            "type": "object",
+            "description": "Складний лінійний знак (без SVG-файлів): паралельні обводки + маркери вздовж лінії. Малюється CIMLineSymbol. Усі розміри в точках.",
+            "properties": {
+              "strokes": {
+                "type": "array",
+                "description": "Обводки знизу вгору. offset — зсув упоперек (плюс/мінус — паралелі); dash — шаблон [риска, проміжок]; dashOffset — зсув уздовж.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "color": { "type": "string" },
+                    "width": { "type": "number" },
+                    "dash": { "type": "array", "items": { "type": "number" } },
+                    "dashOffset": { "type": "number" },
+                    "offset": { "type": "number" },
+                    "style": { "type": "string", "enum": ["solid", "dash", "dot", "dash-dot"] }
+                  }
+                }
+              },
+                "markers": {
+                  "type": "array",
+                  "description": "Маркери вздовж лінії (tick/tooth/check/chevron/dot) або на вершинах (placement vertices: на кожній вершині і кінцях).",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "shape": { "type": "string", "enum": ["tick", "tooth-up", "tooth-down", "check-up", "check-down", "chevron", "dot"] },
+                    "color": { "type": "string" },
+                    "size": { "type": "number" },
+                    "interval": { "type": "number" },
+                    "alongOffset": { "type": "number" },
+                    "thickness": { "type": "number" },
+                    "placement": { "type": "string", "enum": ["along", "vertices"], "description": "along (дефолт) — через interval; vertices — на кожній вершині і кінцях." }
+                  }
+                }
+              },
+              "pairedArrows": {
+                "type": "object",
+                "description": "Парні шеврони біля вершин (оверлей, не CIM): screen-одиниці. size — габарит, distance — відстань першого центра від вершини, gap — між центрами пари.",
+                "properties": {
+                  "size": { "type": "number" },
+                  "distance": { "type": "number" },
+                  "gap": { "type": "number" },
+                  "color": { "type": "string" }
+                }
+              }
+            }
+          },
+          "fill": {
+            "type": "object",
+            "description": "Заливка полігона: або суцільна (color + opacity 0–1), або маркер-сітка (markerSvg + spacingMm).",
+            "properties": {
+              "color": { "type": "string", "description": "Суцільна заливка (ігнорується, якщо задано markerSvg)." },
+              "opacity": { "type": "number", "description": "Прозорість суцільної заливки 0–1 (дефолт 1)." },
+              "markerSvg": { "type": "string", "description": "SVG маркера сітки, шлях від base." },
+              "spacingMm": { "type": "number", "description": "Крок сітки в МІЛІМЕТРАХ аркуша/екрана (однаковий на всіх масштабах, як у координатної сітки)." },
+              "markerPx": { "type": "number", "description": "Розмір маркера в px при 96 dpi." },
+              "layout": { "type": "string", "enum": ["checker", "grid", "scatter"], "description": "checker — шаховий порядок (дефолт), grid — строга квадратна сітка, scatter — нерегулярна розсипка (кілька маркерів зі своїми dx/dy/rotate)." },
+              "scatter": {
+                "type": "array",
+                "description": "Маркери розсипки: dx/dy — частки тайла 0..1, rotate — градуси, scale — масштаб.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "dx": { "type": "number" },
+                    "dy": { "type": "number" },
+                    "rotate": { "type": "number" },
+                    "scale": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

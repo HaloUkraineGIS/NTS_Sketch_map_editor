@@ -1,0 +1,633 @@
+/* Keep the editor workspace inside the browser viewport even when Editor loads many tools. */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.work-area {
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+.side-panel,
+.map-stage {
+  min-height: 0;
+}
+
+.side-panel {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.side-panel .panel-footnote {
+  margin-top: 16px;
+  flex: 0 0 auto;
+}
+
+.editor-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.editor-host .esri-editor,
+.editor-host .esri-editor__content,
+.editor-host .esri-editor__panel {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.mode-edit .side-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.mode-edit .editor-host:not(:empty) {
+  min-height: 180px;
+}
+
+.map-stage,
+.map-pane,
+.map-pane .map-canvas {
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 680px) {
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .work-area {
+    flex: 1 0 auto;
+  }
+
+  .side-panel {
+    overflow: visible;
+  }
+
+  .editor-host {
+    max-height: 220px;
+    flex: 0 1 auto;
+  }
+}
+
+/* Макет друку: вікно невидиме — лише панель і аркуш без рамок/фонів. */
+.mode-print .map-stage {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.mode-print .paper-wrap {
+  inset: 14px;
+}
+.panel-block {
+  display: contents;
+}
+
+@media (min-width: 901px) {
+  /* Ширша панель редагування + щільні відступи, без горизонтального скролу. */
+  .work-area {
+    grid-template-columns: 322px minmax(0, 1fr);
+  }
+
+  .side-panel {
+    padding: 16px 14px 12px;
+    overflow-x: clip;
+  }
+
+  .panel-block > .task-picker {
+    margin-bottom: 8px;
+  }
+
+  .editor-host {
+    margin-top: 8px;
+    min-width: 0;
+  }
+
+  .editor-host .esri-widget {
+    min-width: 0;
+  }
+}
+
+/* Шапка Editor: гасимо вертикальний паддінг Calcite-панелі (усі екрани).
+ * Класи header-content живуть у shadow DOM — документний селектор їх не дістає,
+ * а parts панель не експортує. Тому бʼємо спадковою змінною з !important:
+ * вона сильніша за :host([scale]) всередині тіні. */
+.editor-host {
+  --calcite-internal-panel-header-vertical-padding: 0 !important;
+}
+
+.panel-block.block-hidden {
+  display: none;
+}
+
+/* Вкладка редагування: карта зверху, таблиця evidence під нею. */
+.edit-map.pane-visible {
+  display: flex;
+  flex-direction: column;
+}
+
+.edit-map-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Пояс-захист: редакторські блоки не можуть світитись у макеті друку,
+   навіть якщо віджет Esri спробує перечепити свій DOM. */
+.mode-print .editor-host,
+.mode-print .template-picker,
+.mode-print .panel-task-picker {
+  display: none !important;
+}
+
+/* Сірий патч для кодів поза бібліотекою */
+.print-page .legend-card .legend-patch {
+  display: inline-block;
+  width: 4.5mm;
+  height: 4.5mm;
+  border-radius: 50%;
+  background: #9aa5ad;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 0 1px #c4ced4;
+  flex: 0 0 auto;
+  margin: 0 1.5mm 0 0;
+}
+.panel-task-picker {
+  width: 100%;
+  margin-bottom: 14px;
+  flex: 0 0 auto;
+}
+
+/* Селект завдання — як інші контроли сайдбара (базовий font:12px inherit невалідний і ігнорується браузером). */
+.panel-task-picker select {
+  height: 38px;
+  font-size: 11px;
+  color: #2d4253;
+}
+
+/* Кнопка-тогл UTM-сітки: вигляд як у сусідніх інфо-карток. */
+.grid-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 10px;
+  background: #f7f9fa;
+  border: 1px solid #edf0f2;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.grid-toggle strong {
+  display: block;
+  font-size: 10px;
+  color: #3e5363;
+}
+
+.grid-toggle small {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  color: #8a98a2;
+}
+
+.grid-toggle.on {
+  border-color: #9fd0d1;
+  background: #eef6f5;
+}
+
+.move-mark {
+  width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #9faeb7;
+  border-radius: 6px;
+  color: #5c707b;
+  flex: 0 0 auto;
+}
+
+.move-mark svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.inset-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
+}
+
+.inset-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 650;
+  color: #355261;
+  cursor: pointer;
+}
+
+.inset-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: #1b686b;
+  cursor: pointer;
+}
+
+/* Живе оновлення бібліотеки знаків після ручних правок JSON/SVG. */
+.symbols-reload {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* Легенда макета: один блок з префіксом .print-page (0,2,0+) — перебиває базу App.css
+   незалежно від порядку підключення стилів. */
+.print-page .legend-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 2mm;
+}
+
+.print-page .legend-card .legend-rows {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.print-page .legend-card .legend-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  height: 6mm;
+}
+
+.print-page .legend-card .legend-row img {
+  width: 4.5mm;
+  height: 4.5mm;
+  flex: 0 0 auto;
+  margin: 0 1.5mm 0 0;
+  object-fit: contain;
+}
+
+.print-page .legend-card .legend-row span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 2.1mm;
+  line-height: 1.3;
+}
+
+.print-page .legend-card .legend-section {
+  height: 5mm;
+  line-height: 5mm;
+  font-size: 2.1mm;
+  letter-spacing: 0.08em;
+  color: #6d7d89;
+  margin: 0;
+}
+
+/* Інсет-карти LM/BM: 40×50мм поверх головної карти, волосяна рамка 0.2мм. */
+.print-page .inset-map {
+  position: absolute;
+  border: 0.2mm solid #333333;
+  background: #ffffff;
+  box-sizing: border-box;
+  overflow: hidden;
+  cursor: default;
+}
+
+.print-page .inset-map.movable {
+  outline: 0.5mm dashed #1a56db;
+  outline-offset: 0.5mm;
+  cursor: grab;
+}
+
+.print-page .inset-map:active {
+  cursor: grabbing;
+}
+
+.print-page .inset-map > .map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* У режимі переміщення внутрішній контейнер глухий до подій: ціль — рамка,
+ * Esri жестів не бачить у принципі (ні capture-війн, ні перехоплень).
+ * Заодно ховер бачить курсор рамки, а не карти. */
+.print-page .inset-map.movable > .map-canvas {
+  pointer-events: none;
+}
+
+/* Ручка-хваталка інсета (лише превʼю, в JPEG не потрапляє): лежить ПОЗА
+ * Esri-контейнером, тому події взагалі не доходять до карти — працює завжди,
+ * на відміну від drag за площу бокса. Без тексту, лише grip-крапки. */
+.print-page .inset-map .inset-grip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5mm;
+  cursor: grab;
+  background: linear-gradient(to bottom, rgba(20, 30, 40, 0.45), rgba(20, 30, 40, 0));
+  z-index: 5;
+}
+
+.print-page .inset-map .inset-grip:active {
+  cursor: grabbing;
+}
+
+.print-page .inset-map .inset-grip::after {
+  content: '';
+  position: absolute;
+  top: 1.2mm;
+  left: 50%;
+  width: 8mm;
+  height: 1.6mm;
+  transform: translateX(-50%);
+  background-image: radial-gradient(circle, #ffffff 1px, transparent 1.4px);
+  background-size: 2.6mm 1.6mm;
+  background-repeat: repeat-x;
+  opacity: 0.9;
+}
+
+/* Кут зміни розміру інсета (як кут легенди): поза Esri-контейнером. */
+.print-page .inset-map .inset-corner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  z-index: 6;
+}
+
+/* Краї легенди: лівий/верхній — рух, правий/нижній/кут — розмір. */
+.print-page .legend-edge {
+  position: absolute;
+  z-index: 5;
+}
+
+.print-page .edge-left {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: move;
+}
+
+.print-page .edge-top {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 8px;
+  cursor: move;
+}
+
+.print-page .edge-right {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.print-page .edge-bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.print-page .edge-corner {
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+
+.print-page .legend-card .legend-warn {
+  color: #9a6b1f;
+}
+
+/* Футер під підписами сітки: 2мм від краю, щоб не лізти на координати. */
+.page-footer {
+  bottom: 0.7%;
+}
+.map-stage {
+  position: relative;
+}
+
+.toast {
+  position: absolute;
+  z-index: 30;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(600px, 92%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 8px 9px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #254258;
+  background: #fffffff7;
+  border: 1px solid #dbe4e9;
+  box-shadow: 0 8px 24px #16304a2e;
+  pointer-events: auto;
+}
+
+.toast-mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.toast-info .toast-mark {
+  background: #e7f0f4;
+  color: #2f5d6e;
+}
+
+.toast-error {
+  border-color: #efc9c9;
+}
+
+.toast-error .toast-mark {
+  background: #fbe4e4;
+  color: #a02c2c;
+}
+
+.toast-text {
+  min-width: 0;
+}
+
+.toast button {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #7b8b96;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+/* Стрілка півночі: SVG-знак поверх карти, тягнеться мишкою в межах кадру. */
+.print-map-frame .north-arrow-img {
+  position: absolute;
+  width: auto;
+  z-index: 3;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  filter: drop-shadow(0 0 1.5px #ffffff);
+}
+
+.print-map-frame .north-arrow-img:active {
+  cursor: grabbing;
+}
+
+/* Логотип організації: як стрілка — поверх карти, тягнеться мишкою. */
+.print-map-frame .halo-logo-img {
+  position: absolute;
+  width: auto;
+  z-index: 3;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  filter: drop-shadow(0 0 1.5px #ffffff);
+}
+
+.print-map-frame .halo-logo-img:active {
+  cursor: grabbing;
+}
+
+/* Шапка аркуша: таблиця поверх карти, тягнеться мишкою. */
+.print-map-frame .header-block-img {
+  position: absolute;
+  height: auto;
+  z-index: 3;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  filter: drop-shadow(0 0 1.5px #ffffff);
+}
+
+.print-map-frame .header-block-img:active {
+  cursor: grabbing;
+}
+
+/* Масштабний штамп: блок поверх карти, тягнеться мишкою. */
+.print-map-frame .scale-block-img {
+  position: absolute;
+  height: auto;
+  z-index: 3;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  filter: drop-shadow(0 0 1.5px #ffffff);
+}
+
+.print-map-frame .scale-block-img:active {
+  cursor: grabbing;
+}
+
+/* Кутовий штамп: таблиця поверх карти, тягнеться мишкою. */
+.print-map-frame .stamp-table-img {
+  position: absolute;
+  height: auto;
+  z-index: 3;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  filter: drop-shadow(0 0 1.5px #ffffff);
+}
+
+.print-map-frame .stamp-table-img:active {
+  cursor: grabbing;
+}
+
+/* Власний масштаб: поле вводу + кнопка, в стилі сусіднього селекта. */
+.scale-custom-row {
+  display: flex;
+  gap: 6px;
+}
+
+.scale-custom-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #dce4e8;
+  border-radius: 8px;
+  background: #fff;
+  color: #2d4253;
+  font-size: 11px;
+  outline: none;
+}
+
+.scale-custom-row input:focus {
+  border-color: #4d9293;
+  box-shadow: 0 0 0 3px #4d92931a;
+}
+
+.scale-custom-row button {
+  flex: 0 0 38px;
+  height: 38px;
+  border: 1px solid #dce4e8;
+  border-radius: 8px;
+  background: #f4f7f8;
+  color: #2d4253;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.scale-custom-row button:hover {
+  border-color: #4d9293;
+  color: #1b5864;
+}
+
+/* Підпис системи координат: всередині кадру внизу ліворуч, поверх карти. */
+.print-map-frame .frame-coord-label {
+  position: absolute;
+  z-index: 3;
+  font-size: 2.2mm;
+  color: #344054;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 0 2px #ffffff, 0 0 3px #ffffff;
+}
