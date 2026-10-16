@@ -7,10 +7,13 @@ import type MapView from '@arcgis/core/views/MapView.js'
 import { EVIDENCE_ANGLE_FIELD, EVIDENCE_DESCR_MAX, EVIDENCE_HIDDEN_CODE, loadEvidenceLibrary, type EvidenceLibrary } from '../symbols/library'
 import {
   EVIDENCE_PAGE_SIZE,
+  findEvidencePage,
   queryEvidencePage,
   saveEvidenceRow,
   type EvidenceRow,
 } from './evidenceData'
+import SymbolSearch from './SymbolSearch'
+import { symbolDisplayName } from './symbolDisplay'
 import './evidence.css'
 
 type Props = {
@@ -55,13 +58,66 @@ export default function EvidenceTable({ view, layer, taskCode, onSaved }: Props)
   const [rowError, setRowError] = useState<Record<number, string>>({})
   const [selectedFid, setSelectedFid] = useState<number | null>(null)
   const highlightRef = useRef<{ remove(): void } | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null)
+  // Дзеркала для колбеків карти (клік-хендлер підписується один раз).
+  const pageRef = useRef(page)
+  pageRef.current = page
+  const selectedRef = useRef<number | null>(null)
+  selectedRef.current = selectedFid
+  const pendingScrollRef = useRef<number | null>(null)
+
+  const highlightFid = useCallback(
+    async (fid: number) => {
+      try {
+        const layerView = await view.whenLayerView(layer)
+        highlightRef.current?.remove()
+        highlightRef.current = (
+          layerView as unknown as { highlight: (id: number) => { remove(): void } }
+        ).highlight(fid)
+      } catch {
+        /* підсвітка необовʼязкова */
+      }
+    },
+    [view, layer],
+  )
+
+  const scrollToRow = useCallback((fid: number) => {
+    scrollRef.current?.querySelector(`[data-fid="${fid}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [])
+
+  /** Вибір кліком по точці на карті: підсвітка + розгорнута таблиця + стрибок на сторінку + прокрутка. */
+  const revealFromMap = useCallback(
+    async (fid: number) => {
+      if (selectedRef.current === fid) {
+        scrollToRow(fid)
+        return
+      }
+      setCollapsed(false)
+      setSelectedFid(fid)
+      await highlightFid(fid)
+      try {
+        const targetPage = await findEvidencePage(view, layer, fid)
+        if (targetPage < 0) return
+        if (targetPage === pageRef.current) {
+          scrollToRow(fid)
+        } else {
+          pendingScrollRef.current = fid
+          setPage(targetPage)
+        }
+      } catch {
+        /* стрибок на сторінку необовʼязковий — підсвітка вже є */
+      }
+    },
+    [view, layer, highlightFid, scrollToRow],
+  )
 
   useEffect(() => {
     setPage(0)
     setDrafts({})
     setRowError({})
     setSelectedFid(null)
+    pendingScrollRef.current = null
     highlightRef.current?.remove()
     highlightRef.current = null
   }, [taskCode])
@@ -129,6 +185,36 @@ export default function EvidenceTable({ view, layer, taskCode, onSaved }: Props)
     return () => handle.remove()
   }, [layer, loadPage])
 
+  // Клік по точці evidence на карті — вибрати її рядок у таблиці.
+  // Порожній клік вибір не скидає (для цього є кнопка Clear).
+  useEffect(() => {
+    const handle = view.on('click', (event) => {
+      void (async () => {
+        try {
+          const response = await view.hitTest(event)
+          const hit = response.results.find((result) => {
+            const graphic = (result as { graphic?: { layer?: unknown } }).graphic
+            return graphic?.layer === layer
+          }) as { graphic?: { attributes?: Record<string, unknown> } } | undefined
+          const fid = hit?.graphic?.attributes?.[layer.objectIdField]
+          if (typeof fid !== 'number') return
+          await revealFromMap(fid)
+        } catch {
+          /* hitTest необовʼязковий */
+        }
+      })()
+    })
+    return () => handle.remove()
+  }, [view, layer, revealFromMap])
+
+  // Після стрибка на сторінку з карти — прокрутити таблицю до рядка.
+  useEffect(() => {
+    const fid = pendingScrollRef.current
+    if (fid == null) return
+    pendingScrollRef.current = null
+    scrollToRow(fid)
+  }, [rows, scrollToRow])
+
   useEffect(
     () => () => {
       highlightRef.current?.remove()
@@ -164,15 +250,7 @@ export default function EvidenceTable({ view, layer, taskCode, onSaved }: Props)
       return
     }
     setSelectedFid(fid)
-    try {
-      const layerView = await view.whenLayerView(layer)
-      highlightRef.current?.remove()
-      highlightRef.current = (
-        layerView as unknown as { highlight: (id: number) => { remove(): void } }
-      ).highlight(fid)
-    } catch {
-      /* підсвітка необов’язкова */
-    }
+    await highlightFid(fid)
   }
 
   function clearSelection() {
@@ -317,7 +395,7 @@ export default function EvidenceTable({ view, layer, taskCode, onSaved }: Props)
         </span>
       </header>
       {error && <div className="evidence-error">{error}</div>}
-      <div className="evidence-scroll">
+      <div className="evidence-scroll" ref={scrollRef}>
         <table>
           <thead>
             <tr>
@@ -343,6 +421,7 @@ export default function EvidenceTable({ view, layer, taskCode, onSaved }: Props)
               return (
                 <tr
                   key={row.fid}
+                  data-fid={row.fid}
                   className={`${editing ? 'editing' : ''}${selectedFid === row.fid ? ' selected' : ''}`}
                   onClick={() => void selectRow(row.fid)}
                 >
@@ -386,33 +465,23 @@ export default function EvidenceTable({ view, layer, taskCode, onSaved }: Props)
                     {editing ? (
                       <span className="symbol-edit">
                         <SymbolPreview library={library} code={draft.symbol_code} />
-                        <select
+                        <SymbolSearch
+                          library={library}
+                          symbols={evidenceSymbols}
                           value={draft.symbol_code}
-                          className={draft.symbol_code === EVIDENCE_HIDDEN_CODE ? 'is-hidden-code' : undefined}
-                          onChange={(event) =>
+                          unknownCode={unknownCode}
+                          onChange={(code) =>
                             setDrafts((prev) => ({
                               ...prev,
-                              [row.fid]: { ...draft, symbol_code: event.target.value },
+                              [row.fid]: { ...draft, symbol_code: code },
                             }))
                           }
-                        >
-                          <option value="">— без коду —</option>
-                          {evidenceSymbols.map((symbol) => (
-                            <option
-                              key={symbol.code}
-                              value={symbol.code}
-                              className={symbol.hidden ? 'is-hidden-code' : undefined}
-                            >
-                              {symbol.code} · {symbol.name}
-                            </option>
-                          ))}
-                          {unknownCode && <option value={unknownCode}>{unknownCode} (поза бібліотекою)</option>}
-                        </select>
+                        />
                       </span>
                     ) : (
                       <span className="symbol-view">
                         <SymbolPreview library={library} code={row.symbol_code} />
-                        <span className={row.symbol_code === EVIDENCE_HIDDEN_CODE ? 'symbol-code-hidden' : undefined}>{row.symbol_code || '—'}</span>
+                        <span className={row.symbol_code === EVIDENCE_HIDDEN_CODE ? 'symbol-code-hidden' : undefined} title={symbolDisplayName(library, row.symbol_code)}>{symbolDisplayName(library, row.symbol_code)}</span>
                       </span>
                     )}
                   </td>
@@ -502,7 +571,7 @@ function SymbolPreview({ library, code }: { library: EvidenceLibrary | null; cod
       className="symbol-img"
       src={`${import.meta.env.BASE_URL}${symbol.svg}`}
       alt={symbol.name}
-      title={`${symbol.code} · ${symbol.name}`}
+      title={symbol.name}
     />
   )
 }

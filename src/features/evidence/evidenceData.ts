@@ -97,3 +97,22 @@ export async function saveEvidenceRow(
     throw new Error(editError?.message ?? 'Сервіс відхилив оновлення.')
   }
 }
+
+/**
+ * Сторінка (0-based) обʼєкта в поточному фільтрі evidence (той самий порядок —
+ * за ObjectID, що в пагінації) або -1, якщо обʼєкт поза фільтром.
+ */
+export async function findEvidencePage(
+  view: MapView,
+  layer: FeatureLayer,
+  fid: number,
+  pageSize = EVIDENCE_PAGE_SIZE,
+): Promise<number> {
+  const where = await getEvidenceWhere(view, layer)
+  const ids = await layer
+    .queryObjectIds({ where, orderByFields: [layer.objectIdField] })
+    .catch(() => null)
+  if (!ids) return -1
+  const index = ids.indexOf(fid)
+  return index < 0 ? -1 : Math.floor(index / pageSize)
+}

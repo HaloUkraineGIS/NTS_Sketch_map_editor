@@ -294,6 +294,85 @@
   padding: 0 6px;
 }
 
+/* Швидкий пошук знака: поле в стилі колишнього селекта + випадайка збігів.
+ * Список рендериться порталом у body (position:fixed), бо скрол таблиці
+ * обрізав би абсолютну випадайку всередині комірки. */
+.symbol-search-box {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.symbol-search-box input {
+  width: 100%;
+  height: 30px;
+  font-size: 11px;
+  border: 1px solid #cfe0e2;
+  border-radius: 6px;
+  background: #fff;
+  color: #2d4253;
+  padding: 0 8px;
+  outline: none;
+}
+
+.symbol-search-box input:focus {
+  border-color: #4d9293;
+  box-shadow: 0 0 0 3px #4d92931a;
+}
+
+.symbol-search-options {
+  position: fixed;
+  z-index: 200;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #dce4e8;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px #16304a2e;
+}
+
+.symbol-search-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #2d4253;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.symbol-search-option span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.symbol-search-option.active {
+  background: #eef6f5;
+}
+
+.symbol-search-option.selected {
+  font-weight: 700;
+}
+
+.symbol-search-option.is-hidden-code,
+.symbol-search-empty,
+.symbol-search-more {
+  font-size: 10px;
+}
+
+.symbol-search-option.is-hidden-code {
+  color: #1a56db;
+  font-weight: 700;
+}
+
+.symbol-search-empty,
+.symbol-search-more {
+  padding: 8px 10px;
+  color: #8a98a2;
+}
+
 .descr-view {
   display: block;
   max-width: 460px;
