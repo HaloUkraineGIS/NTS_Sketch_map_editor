@@ -1,5 +1,6 @@
 import WebMap from '@arcgis/core/WebMap.js'
 import esriConfig from '@arcgis/core/config.js'
+import Basemap from '@arcgis/core/Basemap.js'
 import Graphic from '@arcgis/core/Graphic.js'
 import type Layer from '@arcgis/core/layers/Layer.js'
 import MapView from '@arcgis/core/views/MapView.js'
@@ -10,6 +11,8 @@ import FieldElement from '@arcgis/core/form/elements/FieldElement.js'
 import FeatureSnappingLayerSource from '@arcgis/core/views/interactive/snapping/FeatureSnappingLayerSource.js'
 import type FeatureLayer from '@arcgis/core/layers/FeatureLayer.js'
 import { LAYER_URLS, PORTAL_URL, WEBMAP_ITEM_ID } from '../config'
+import { DEFAULT_BASEMAP_ID, type BasemapId } from '../features/basemap/basemapOptions'
+import { allInsetBasemapLayers, createInsetBasemapLayers, type InsetBasemapLayers } from '../features/basemap/basemap'
 import type { EvidenceLibrary } from '../features/symbols/library'
 
 export type LayerKey = keyof typeof LAYER_URLS
@@ -19,6 +22,8 @@ export type MapSession = {
   /** Друкована карта створюється ліниво при першому відкритті вкладки друку. */
   printView: MapView | null
   layers: Partial<Record<LayerKey, FeatureLayer>>
+  /** Окремі шари підкладу для інсетів LM/BM (видимі тільки в них). */
+  insetBasemapLayers: InsetBasemapLayers | null
   /** Існує лише у вкладці редагування; у друці — null (див. ensure/destroyEditor). */
   editor: Editor | null
   library: EvidenceLibrary | null
@@ -89,6 +94,15 @@ export async function createMapSession(
   const map = new WebMap({ portalItem: { id: WEBMAP_ITEM_ID } })
   await withTimeout(map.load(), 60000, 'WebMap не завантажилась за 60 с. Перевірте сесію Portal і мережу.')
 
+  // Детермінований стартовий підклад редагування (замість авторського з WebMap);
+  // вибір користувача — селектором у вкладці редагування.
+  try {
+    const initial = Basemap.fromId(DEFAULT_BASEMAP_ID)
+    if (initial) map.basemap = initial
+  } catch {
+    /* лишається підклад WebMap */
+  }
+
   const layers: Partial<Record<LayerKey, FeatureLayer>> = {}
   map.allLayers.forEach((layer) => {
     if (layer.type === 'feature') {
@@ -109,6 +123,38 @@ export async function createMapSession(
   })
   await withTimeout(editView.when(), 60000, 'Карта редагування не створилась за 60 с.')
 
+  // Окремі шари підкладу для інсетів (вибір підкладу інсетів не чіпає редагування):
+  // базові — вниз стеку, референсні (підписи) — поверх даних.
+  // Видимі тільки в інсетах (політика в syncBasemapVisibility); тут ховаємо в редагуванні.
+  onStep?.('Підготовка підкладів для інсетів…')
+  let insetBasemapLayers: InsetBasemapLayers | null
+  let insetTopoWarning: string | null = null
+  try {
+    const created = createInsetBasemapLayers()
+    const ids = Object.keys(created) as BasemapId[]
+    for (const id of ids) {
+      for (const layer of created[id].base) map.add(layer, 0)
+    }
+    for (const id of ids) {
+      for (const layer of created[id].reference) map.add(layer)
+    }
+    insetBasemapLayers = created
+    await Promise.all(
+      allInsetBasemapLayers(created).map(async (layer) => {
+        try {
+          const layerView = await editView.whenLayerView(layer)
+          layerView.visible = false
+        } catch {
+          /* LayerView ще нема — політика сховає пізніше */
+        }
+      }),
+    )
+  } catch (error) {
+    insetBasemapLayers = null
+    insetTopoWarning =
+      `Підклади для інсетів не створились: ${error instanceof Error ? error.message : 'невідома помилка'} — карти LM/BM будуть без підкладу.`
+  }
+
   // Схема шарів (fields) потрібна до бібліотеки: інакше перевірка symbol_code
   // спрацьовує по незавантажених полях і лишає застарілі варнінги.
   onStep?.('Завантаження схеми шарів…')
@@ -122,6 +168,7 @@ export async function createMapSession(
   onStep?.('Завантаження бібліотеки знаків…')
   let library: EvidenceLibrary | null = null
   const symbolWarnings: string[] = []
+  if (insetTopoWarning) symbolWarnings.push(insetTopoWarning)
   try {
     const { loadEvidenceLibrary, applyLibraryRenderers, applyLayerTemplates } =
       await import('../features/symbols/library')
@@ -262,6 +309,7 @@ export async function createMapSession(
     editView,
     printView: null,
     layers,
+    insetBasemapLayers,
     editor: makeEditor(),
     library,
     symbolWarnings,

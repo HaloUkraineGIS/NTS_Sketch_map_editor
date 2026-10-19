@@ -29,6 +29,15 @@ export const PRINT_SCALES = [
 export const CUSTOM_SCALE_MIN = 100
 export const CUSTOM_SCALE_MAX = 100000
 
+/** Пресети масштабу інсет-карт LM/BM. */
+export const INSET_SCALES = [
+  2000, 5000, 7000, 10000, 15000, 20000, 25000, 30000, 35000,
+]
+
+/** Довільний масштаб інсета: ціле кратне 1000 у цих межах. */
+export const INSET_CUSTOM_SCALE_MIN = 1000
+export const INSET_CUSTOM_SCALE_MAX = 100000
+
 export const LAYER_ROLES = {
   task: 'filter-parent',
   evidence: 'attribute-only',

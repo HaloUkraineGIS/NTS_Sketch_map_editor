@@ -21,6 +21,8 @@ import EvidenceTable from './features/evidence/EvidenceTable'
 import TaskSearch from './features/tasks/TaskSearch'
 import TemplatePicker from './features/editing/TemplatePicker'
 import { CUSTOM_SCALE_MAX, CUSTOM_SCALE_MIN, PORTAL_URL, PRINT_SCALES } from './config'
+import { BASEMAP_OPTIONS, DEFAULT_BASEMAP_ID, DEFAULT_INSET_BASEMAP_ID } from './features/basemap/basemapOptions'
+import InsetScaleSelect from './features/insets/InsetScaleSelect'
 import { a4Dimensions, drawUtmGrid, GRID_LABEL_ANCHOR_MM, type PrintFrame } from './features/print-layout/grid'
 import { defaultScaleBarPos, scaleBarDataUrl, scaleBarSpec } from './features/print-layout/scaleBar'
 import {
@@ -163,9 +165,9 @@ const INSET_MIN_MM = 20
 const INSET_FRAME_MM = 0.2
 const INSET_GAP_MM = 4
 const INSET_MARGIN_MM = 4
-const INSET_DEFAULT_SCALE = 1000
+const INSET_DEFAULT_SCALE = 10000
 type InsetKind = 'lm' | 'bm'
-type InsetDef = { id: string; kind: InsetKind; label: string }
+  type InsetDef = { id: string; kind: InsetKind; label: string; oid: number }
 type InsetPos = { xMm: number; yMm: number }
 type InsetSize = { wMm: number; hMm: number }
 type StampPos = { xMm: number; yMm: number }
@@ -299,14 +301,21 @@ function App() {
   const [gridVisible, setGridVisible] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [symbolsBusy, setSymbolsBusy] = useState(false)
+  // Підклад вкладки редагування (селектор вверху справа карти; на друк не впливає:
+  // друк без підкладу взагалі, інсети завжди з топо).
+  const [basemapId, setBasemapId] = useState<string>(DEFAULT_BASEMAP_ID)
+  // Підклад інсет-карт LM/BM (селектор у макеті друку; той самий список).
+  const [insetBasemapId, setInsetBasemapId] = useState<string>(DEFAULT_INSET_BASEMAP_ID)
   const zoneWkidRef = useRef(zoneWkid)
   const scaleRef = useRef(scale)
   const tabRef = useRef<Tab>('edit')
+  const insetBasemapIdRef = useRef(insetBasemapId)
   const insetScalesRef = useRef(insetScales)
   const insetMoveRef = useRef(insetMove)
   useEffect(() => { zoneWkidRef.current = zoneWkid }, [zoneWkid])
   useEffect(() => { scaleRef.current = scale }, [scale])
   useEffect(() => { tabRef.current = tab }, [tab])
+  useEffect(() => { insetBasemapIdRef.current = insetBasemapId }, [insetBasemapId])
   useEffect(() => { insetScalesRef.current = insetScales }, [insetScales])
   useEffect(() => { insetMoveRef.current = insetMove }, [insetMove])
   const editMapRef = useRef<HTMLDivElement>(null)
@@ -314,6 +323,7 @@ function App() {
   const insetMapRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const insetViewsRef = useRef<Record<string, MapView | null>>({})
   const insetCentersRef = useRef<Record<string, Point>>({})
+  const insetDefsRef = useRef<InsetDef[]>([])
   /** Канонічні графіки бейджів (не змонтовані): розкладаються копіями по вʼю. */
   const badgeGraphicsRef = useRef<Graphic[]>([])
   /** Посередник на rebuild шевронів: самі функції оголошено нижче за місцем виклику. */
@@ -477,6 +487,9 @@ function App() {
           const { filterLayersByTask } = await import('./arcgis/taskFilter')
           await filterLayersByTask(printView, session.layers, taskCode)
         }
+        // Підклад друку — жодного: ховаємо шари підкладу і топо-VTL інсетів
+        // (зміна SR вище перестворила LayerView і знесла visible).
+        await syncBasemapPolicy()
         if (!alive) return
         const fitted = taskIdsRef.current.length
           ? await fitPrintToTaskPolygons(printView).catch(() => false)
@@ -574,6 +587,7 @@ function App() {
     const session = sessionRef.current
     if (!session || !code) {
       insetCentersRef.current = {}
+      insetDefsRef.current = []
       setInsets([])
       setInsetFound({})
       return
@@ -584,26 +598,114 @@ function App() {
     const centers: Record<string, Point> = {}
     for (const target of targets) centers[target.id] = target.center
     insetCentersRef.current = centers
-    setInsets(targets.map(({ id, kind, label }) => ({ id, kind, label })))
+    const defs = targets.map(({ id, kind, label, oid }) => ({ id, kind, label, oid }))
+    insetDefsRef.current = defs
+    setInsets(defs)
     const found: Record<string, boolean> = {}
     for (const target of targets) found[target.id] = true
     setInsetFound(found)
   }, [])
 
-  /** SR (опційно) + фільтр завдання на інсетах, далі перезавантаження дефів. */
-  const syncInsets = useCallback(async (code: string, wkid: number | null) => {
+  /**
+   * Розкласти видимість підкладів по вʼю: друк без підкладу, інсети з топо.
+   * Після кожної зміни SR (зносить LayerView.visible), створення інсета і зміни підкладу.
+   */
+  const syncBasemapPolicy = useCallback(async () => {
+    const session = sessionRef.current
+    if (!session) return
+    const { syncBasemapVisibility } = await import('./features/basemap/basemap')
+    const insetViews = Object.values(insetViewsRef.current).filter((view): view is MapView => !!view)
+    await syncBasemapVisibility({
+      map: session.map,
+      editView: session.editView,
+      printView: session.printView,
+      insetViews,
+      insetLayers: session.insetBasemapLayers,
+      insetBasemapId: insetBasemapIdRef.current,
+    }).catch(() => {
+      /* видимість підкладу необовʼязкова — дані й масштаб не чіпає */
+    })
+  }, [])
+
+  /** Авто-масштаб інсета: точка + полігони в кадрі (округлення вгору до 1000;
+   * ручний вибір зі списку діє до наступної таски — як у головної карти). */
+  const fitInsetView = useCallback(async (view: MapView, def: InsetDef, center: Point) => {
+    const session = sessionRef.current
+    if (!session) return
+    const fallback = def.kind === 'lm' ? insetScalesRef.current.lm : insetScalesRef.current.bm
+    try {
+      const { insetContentExtent } = await import('./features/insets/insetContent')
+      const extent = await insetContentExtent(session.layers, taskIdsRef.current, center)
+      if (!extent || !view.width || !view.height || extent.width <= 0 || extent.height <= 0) {
+        throw new Error('no extent')
+      }
+      const need = Math.max(
+        extent.width / (view.width * 0.0254 / 96),
+        extent.height / (view.height * 0.0254 / 96),
+      )
+      const fitted = Math.max(1000, Math.ceil(need / 1000) * 1000)
+      setInsetScales((prev) => {
+        const key = def.kind === 'lm' ? 'lm' : 'bm'
+        return prev[key] === fitted ? prev : { ...prev, [key]: fitted }
+      })
+      await view.goTo({ center: extent.center, scale: fitted }, { animate: false }).catch(() => {})
+    } catch {
+      try {
+        await view.goTo({ center, scale: fallback }, { animate: false })
+      } catch {
+        /* перервано новішим goTo або вʼю знищено */
+      }
+    }
+  }, [])
+
+  /** Фільтр завдання на інсетах (SR не чіпаємо: інсети лишаються у WebMercator,
+   * щоб тайловий топо-підклад відображався — в UTM тайли призупиняються), далі перезавантаження дефів. */
+  const syncInsets = useCallback(async (code: string) => {
     const session = sessionRef.current
     if (!session) return
     const { filterLayersByTask } = await import('./arcgis/taskFilter')
-    const { setPrintSpatialReference } = await import('./arcgis/utm')
+    const { applyInsetContent } = await import('./features/insets/insetContent')
+    await reloadInsetDefs(code)
     for (const id of Object.keys(insetViewsRef.current)) {
       const target = insetViewsRef.current[id]
       if (!target) continue
-      if (wkid !== null) await setPrintSpatialReference(target, wkid)
       await filterLayersByTask(target, session.layers, code)
+      const def = insetDefsRef.current.find((item) => item.id === id)
+      if (def) {
+        await applyInsetContent(target, session.layers, def.oid)
+      }
     }
-    await reloadInsetDefs(code)
-  }, [reloadInsetDefs])
+    await syncBasemapPolicy()
+    for (const id of Object.keys(insetViewsRef.current)) {
+      const target = insetViewsRef.current[id]
+      const def = insetDefsRef.current.find((item) => item.id === id)
+      const center = insetCentersRef.current[id]
+      if (!target || !def || !center) continue
+      await fitInsetView(target, def, center)
+    }
+  }, [reloadInsetDefs, syncBasemapPolicy, fitInsetView])
+
+  /** Підклад редагування зі списку (друк і інсети не чіпає — ними керує політика). */
+  async function changeBasemap(id: string) {
+    const session = sessionRef.current
+    if (!session) return
+    setBasemapId(id)
+    try {
+      const { setEditBasemap } = await import('./features/basemap/basemap')
+      setEditBasemap(session.map, id)
+    } catch (error) {
+      setNotice({ kind: 'error', message: describeError(error, 'Не вдалося змінити підклад.') })
+      return
+    }
+    await syncBasemapPolicy()
+  }
+
+  /** Підклад інсет-карт LM/BM зі списку в макеті друку (редагування не чіпає). */
+  async function changeInsetBasemap(id: string) {
+    if (!sessionRef.current) return
+    setInsetBasemapId(id)
+    await syncBasemapPolicy()
+  }
 
   /**
    * Цифри варіантів evidence поверх знаків: один код з 2+ описами нумерується
@@ -701,7 +803,9 @@ function App() {
         )
       }
       badgeGraphicsRef.current = graphics
-      const views = [session.editView, session.printView, ...Object.values(insetViewsRef.current)]
+      // Бейджі — лише редагування + друк: в інсетах шар evidence схований,
+      // цифри без знаків там ні до чого.
+      const views = [session.editView, session.printView]
         .filter((view): view is MapView => !!view)
       for (const view of views) {
         try {
@@ -731,7 +835,7 @@ function App() {
         if (printView) {
           await filterLayersByTask(printView, current.layers, code)
         }
-        await syncInsets('', null)
+        await syncInsets('')
         await rebuildEvidenceBadges('')
         await rebuildPowerlineArrowsRef.current?.('')
         return
@@ -748,8 +852,9 @@ function App() {
         if (target) {
           await setPrintSpatialReference(target, automaticZone.wkid, automaticZone.point)
           // Фільтр друку — після зміни SR, інакше перестворені LayerView його знесуть.
+          // syncInsets заодно перерозкладає видимість підкладів (SR зносить і visible).
           await filterLayersByTask(target, current.layers, code)
-          await syncInsets(code, automaticZone.wkid)
+          await syncInsets(code)
           const fitted = await fitPrintToTaskPolygons(target).catch(() => false)
           if (!fitted) {
             const { goToScale } = await import('./arcgis/utm')
@@ -764,7 +869,7 @@ function App() {
         if (target) {
           await filterLayersByTask(target, current.layers, code)
         }
-        await syncInsets(code, null)
+        await syncInsets(code)
         setNotice({ kind: 'info', message: 'Не знайдено polygon geopoint у вибраному завданні або точка поза UTM 35N–37N. Залишено поточну зону.' })
       }
       await rebuildEvidenceBadges(code)
@@ -871,11 +976,12 @@ function App() {
     }
   }, [insetMove, insets])
 
-  // Шеврони ЛЕП: оновлення при зупинці будь-якої вʼю (пан/зум міняє кадр запиту).
+  // Шеврони ЛЕП: оновлення при зупинці вʼю редагування/друку (пан/зум міняє кадр запиту).
+  // Інсети не стежимо: тополінії там сховані, шевронів нема.
   useEffect(() => {
     const session = sessionRef.current
     if (!sessionReady || !session) return
-    const views = [session.editView, session.printView, ...Object.values(insetViewsRef.current)]
+    const views = [session.editView, session.printView]
       .filter((view): view is MapView => !!view)
     let alive = true
     const timers = new Map<MapView, number>()
@@ -913,10 +1019,11 @@ function App() {
     if (!sessionReady || !session || !session.printView) return
     let alive = true
     void (async () => {
-      const [{ default: MapView }, { setPrintSpatialReference }, { filterLayersByTask }] = await Promise.all([
+      const [{ default: MapView }, { default: SpatialReference }, { filterLayersByTask }, { applyInsetContent }] = await Promise.all([
         import('@arcgis/core/views/MapView.js'),
-        import('./arcgis/utm'),
+        import('@arcgis/core/geometry/SpatialReference.js'),
         import('./arcgis/taskFilter'),
+        import('./features/insets/insetContent'),
       ])
       for (const def of insets) {
         if (!alive) return
@@ -940,6 +1047,8 @@ function App() {
         const insetView = new MapView({
           map: session.map,
           container,
+          // Явний WebMercator: тайловий топо-підклад у замкненому UTM призупиняється.
+          spatialReference: new SpatialReference({ wkid: 3857 }),
           popupEnabled: false,
           constraints: { snapToZoom: false, rotationEnabled: false },
         })
@@ -955,34 +1064,20 @@ function App() {
           }
           return
         }
-        // Спочатку SR (зносить LayerView), потім фільтр — як у друкованої карти.
-        await setPrintSpatialReference(insetView, zoneWkidRef.current)
-        if (!alive) return
+        // Інсет лишається у WebMercator (див. spatialReference вище) — одразу фільтр.
         await filterLayersByTask(insetView, session.layers, taskCode)
         if (!alive) return
         insetViewsRef.current[def.id] = insetView
+        // Вміст інсета — лише точка + полігони завдання; масштаб — авто під них.
+        // Бейджі evidence і шеврони ЛЕП сюди не кладемо (їхні шари в інсеті сховані).
+        await applyInsetContent(insetView, session.layers, def.oid)
+        if (!alive) return
+        // Політика ПІСЛЯ реєстрації вʼю: інакше свіжий інсет її не отримує
+        // і показує всі набори підкладів разом (зверху — imagery).
+        await syncBasemapPolicy()
+        if (!alive) return
         const center = insetCentersRef.current[def.id]
-        if (center) {
-          try {
-            await insetView.goTo(
-              { center, scale: def.kind === 'lm' ? insetScalesRef.current.lm : insetScalesRef.current.bm },
-              { animate: false },
-            )
-          } catch {
-            /* перервано новішим goTo або вʼю знищено */
-          }
-        }
-        // Накладаємо збережені бейджі варіантів evidence (з taskCode-оновлення).
-        const stored = badgeGraphicsRef.current
-        if (stored.length) {
-          try {
-            insetView.graphics.addMany(stored.map((graphic) => graphic.clone()))
-          } catch {
-            /* вʼю знищено */
-          }
-        }
-        // Шеврони ЛЕП для нової вʼю (кадр уже на місці після goTo вище).
-        await rebuildPowerlineArrowsForViewRef.current?.(insetView, taskCode)
+        if (center) await fitInsetView(insetView, def, center)
       }
       for (const id of Object.keys(insetViewsRef.current)) {
         if (!insets.some((def) => def.id === id)) {
@@ -1004,7 +1099,7 @@ function App() {
     return () => {
       alive = false
     }
-  }, [insets, insetEnabled, insetFound, sessionReady, tab, taskCode])
+  }, [fitInsetView, insets, insetEnabled, insetFound, sessionReady, syncBasemapPolicy, tab, taskCode])
 
   // Точний розмір аркуша в px: вписуємо A4-пропорцію в доступне місце.
   // CSS-фолбек навмисно висотний (height:100% + aspect-ratio): пропорція
@@ -1106,12 +1201,18 @@ function App() {
       if (!infos.length) return
       // Поза діапазоном масштабу (min/maxScale веб-карти) — очікувано за авторством,
       // мʼяке інфо. Решта призупинених — реальна поломка, помилка.
+      // Сховані політикою підкладів (visible === false: топо-VTL і підклад у друці) —
+      // навмисне, не поломка: їх не рахуємо зламаними.
       const rangeByTitle = new Map<string, { min: number; max: number }>()
+      const hiddenByPolicy = new Set<string>()
       for (const layerView of view.allLayerViews.toArray()) {
         const title = layerView.layer?.title || 'без назви'
         if (!settled.has(title) || rangeByTitle.has(title)) continue
         const layer = layerView.layer as unknown as { minScale?: number; maxScale?: number } | null
         rangeByTitle.set(title, { min: layer?.minScale ?? 0, max: layer?.maxScale ?? 0 })
+        if ((layerView as unknown as { visible?: boolean | null }).visible === false) {
+          hiddenByPolicy.add(title)
+        }
       }
       const outOfScale = (title: string) => {
         const range = rangeByTitle.get(title)
@@ -1119,7 +1220,7 @@ function App() {
         return (range.max > 0 && view.scale < range.max) || (range.min > 0 && view.scale > range.min)
       }
       const operational = infos.filter((info) => !info.isBasemap).map((info) => info.title)
-      const broken = operational.filter((title) => !outOfScale(title))
+      const broken = operational.filter((title) => !outOfScale(title) && !hiddenByPolicy.has(title))
       const outOfRange = operational.filter((title) => outOfScale(title))
       const base = infos.filter((info) => info.isBasemap).map((info) => info.title)
       if (broken.length) {
@@ -1663,11 +1764,11 @@ function App() {
     }
   }, [])
 
-  /** Шеврони в усіх вʼю (дані/таска). Навігація — окремо по вʼю (зупинка карти). */
+  /** Шеврони в редагуванні і друці (в інсетах тополінії сховані — там ні до чого). Навігація — окремо по вʼю (зупинка карти). */
   const rebuildPowerlineArrows = useCallback(async (code: string) => {
     const session = sessionRef.current
     if (!session) return
-    const views = [session.editView, session.printView, ...Object.values(insetViewsRef.current)]
+    const views = [session.editView, session.printView]
       .filter((view): view is MapView => !!view)
     await Promise.all(views.map((view) => rebuildPowerlineArrowsForView(view, code)))
   }, [rebuildPowerlineArrowsForView])
@@ -2115,8 +2216,9 @@ function App() {
             <div className="control-group"><label>МАСШТАБ ОСНОВНОЇ КАРТИ</label><select value={PRINT_SCALES.includes(scale) ? scale : 'custom'} onChange={(event) => { const raw = event.target.value; if (raw === 'custom') { setCustomOpen(true); setScaleDraft('') } else { setScale(Number(raw)); setScaleDraft(''); setCustomOpen(false) } }}>{PRINT_SCALES.map((item) => <option key={item} value={item}>1:{item.toLocaleString('uk-UA')}</option>)}<option value="custom">{PRINT_SCALES.includes(scale) ? 'Інший масштаб…' : `Інший масштаб (1:${scale.toLocaleString('uk-UA')})`}</option></select>{(customOpen || !PRINT_SCALES.includes(scale)) && <div className="scale-custom-row"><input ref={customInputRef} value={scaleDraft} onChange={(event) => setScaleDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') applyCustomScale(scaleDraft); if (event.key === 'Escape') { setScaleDraft(''); if (PRINT_SCALES.includes(scale)) setCustomOpen(false) } }} placeholder="Власний, напр. 3500" inputMode="numeric" aria-label="Власний масштаб" /><button onClick={() => applyCustomScale(scaleDraft)} title="Застосувати власний масштаб" aria-label="Застосувати власний масштаб">→</button></div>}</div>
             <button className={`grid-toggle${gridVisible ? ' on' : ''}`} onClick={() => setGridVisible((visible) => !visible)} aria-pressed={gridVisible} title="Увімкнути або вимкнути UTM-сітку на листі"><span className="grid-preview"><i/><i/><i/></span><div><strong>UTM-сітка {gridVisible ? 'увімкнена' : 'вимкнена'}</strong><small>1 мм · координати кожні 10 мм</small></div></button>
             <button className={`grid-toggle${insetMove ? ' on' : ''}`} onClick={() => setInsetMove((value) => !value)} aria-pressed={insetMove} title="Розблокувати переміщення карт LM/BM по аркушу (панорамування всередині при цьому вимкнено)"><span className="move-mark"><MoveGlyph /></span><div><strong>Переміщення інсетів {insetMove ? 'увімкнено' : 'вимкнено'}</strong><small>{insetMove ? 'Тягніть карти по аркушу' : 'Тягніть вміст усередині карт'}</small></div></button>
-            <div className="control-group"><label>КАРТА LM</label><select value={insetScales.lm} onChange={(event) => setInsetScales((prev) => ({ ...prev, lm: Number(event.target.value) }))} aria-label="Масштаб карти LM">{PRINT_SCALES.map((item) => <option key={item} value={item}>1:{item.toLocaleString('uk-UA')}</option>)}</select></div>
-            <div className="control-group"><label>МАСШТАБ BM-КАРТ</label><select value={insetScales.bm} onChange={(event) => setInsetScales((prev) => ({ ...prev, bm: Number(event.target.value) }))} aria-label="Спільний масштаб BM-карт">{PRINT_SCALES.map((item) => <option key={item} value={item}>1:{item.toLocaleString('uk-UA')}</option>)}</select><small>Один на всі карти BM</small></div>
+            <InsetScaleSelect label="КАРТА LM" value={insetScales.lm} ariaLabel="Масштаб карти LM" onChange={(value) => setInsetScales((prev) => ({ ...prev, lm: value }))} onError={(message) => setNotice({ kind: 'error', message })} />
+            <InsetScaleSelect label="МАСШТАБ BM-КАРТ" value={insetScales.bm} ariaLabel="Спільний масштаб BM-карт" hint="Один на всі карти BM" onChange={(value) => setInsetScales((prev) => ({ ...prev, bm: value }))} onError={(message) => setNotice({ kind: 'error', message })} />
+            <div className="control-group"><label>Базова карта LM/BM-КАРТ</label><select value={insetBasemapId} onChange={(event) => void changeInsetBasemap(event.target.value)} aria-label="Підклад карт LM/BM">{BASEMAP_OPTIONS.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))}</select><small>Один на всі карти LM/BM</small></div>
             <div className="control-group"><label>ПОКАЗУВАТИ НА АРКУШІ BM</label>{insets.some((def) => def.kind === 'bm') ? <div className="inset-checks">{insets.filter((def) => def.kind === 'bm').map((def) => (<label className="inset-check" key={def.id}><input type="checkbox" checked={insetEnabled[def.id] !== false} onChange={() => toggleInset(def.id)} /><span>{def.label}</span></label>))}</div> : <small>{taskCode ? 'BM-точок у завданні нема' : 'Оберіть завдання'}</small>}</div>
             <button className="button button-primary export-button" onClick={() => void exportJpeg()} disabled={!sessionReady || !taskCode || exporting}>{exporting ? <span className="spinner"/> : <DownloadGlyph/>}{exporting ? 'Формування JPEG…' : 'Експортувати в JPEG'}</button>
           </div>
@@ -2127,7 +2229,7 @@ function App() {
           {!busy && !sessionReady && <div className="loading-overlay"><span className="error-mark">!</span><strong>Не вдалося відкрити WebMap</strong><small>Перевірте доступ до карти та підключення до Portal.</small><button className="button button-secondary" onClick={() => window.location.reload()}>Повторити</button></div>}
           {notice && <div className={`toast toast-${notice.kind}`} role="status"><span className="toast-mark">{notice.kind === 'error' ? '!' : 'i'}</span><span className="toast-text">{notice.message}</span><button aria-label="Закрити повідомлення" onClick={() => setNotice(null)}>×</button></div>}
           <div className={`map-pane edit-map ${tab === 'edit' ? 'pane-visible' : ''}`}>
-            <div className="edit-map-body"><div className="map-canvas" ref={editMapRef}/><div className="map-attribution">© ArcGIS · джерела карти</div></div>
+            <div className="edit-map-body"><div className="map-canvas" ref={editMapRef}/><label className="basemap-picker" title="Базова карта для редагування (на друк не впливає)"><select value={basemapId} onChange={(event) => void changeBasemap(event.target.value)} aria-label="Базова карта редагування">{BASEMAP_OPTIONS.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))}</select></label><div className="map-attribution">© ArcGIS · джерела карти</div></div>
             {evidenceLayer && editMapView && (
               <EvidenceTable
                 view={editMapView}

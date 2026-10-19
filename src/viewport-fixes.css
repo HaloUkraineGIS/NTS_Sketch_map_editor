@@ -58,6 +58,34 @@
   min-height: 0;
 }
 
+/* Вибір підкладу вверху справа карти редагування (на друк не впливає). */
+.basemap-picker {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffffe8;
+  border: 1px solid #dce4e8;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #2d4253;
+  box-shadow: 0 4px 14px #16304a22;
+}
+
+.basemap-picker select {
+  height: 30px;
+  font-size: 11px;
+  border: 1px solid #cfe0e2;
+  border-radius: 6px;
+  background: #fff;
+  color: #2d4253;
+  max-width: 190px;
+}
+
 @media (max-width: 680px) {
   .app-shell {
     height: auto;
