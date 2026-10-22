@@ -2,6 +2,7 @@ import type Extent from '@arcgis/core/geometry/Extent.js'
 import type FeatureLayer from '@arcgis/core/layers/FeatureLayer.js'
 import type MapView from '@arcgis/core/views/MapView.js'
 import type { LayerKey } from './mapSession'
+import { surveyedLineTaskField } from './surveyedLine'
 
 const childLayers: Partial<Record<LayerKey, LayerKey>> = {
   evidence: 'task',
@@ -123,7 +124,25 @@ export async function filterLayersByTask(
   const taskView = await view.whenLayerView(taskLayer)
   taskView.filter = { where: `${codeField} = ${sqlLiteral(code)}` }
   await applyRelatedFilter(view, layers, 'task', taskGlobalIds)
+  await applySurveyedLineFilter(view, layers, code)
   return taskGlobalIds
+}
+
+/**
+ * Surveyed line не пов'язаний з task через parentglobalid — у нього власний
+ * task_code. Фільтр ставимо на LayerView кожного в'ю (редагування, друк, LM/BM).
+ */
+async function applySurveyedLineFilter(
+  view: MapView,
+  layers: Partial<Record<LayerKey, FeatureLayer>>,
+  code: unknown,
+) {
+  const layer = layers.surveyedLine
+  if (!layer) return
+  const field = surveyedLineTaskField(layer)
+  const layerView = await view.whenLayerView(layer)
+  if (!('filter' in layerView)) return
+  layerView.filter = field ? { where: `${field} = ${sqlLiteral(code)}` } : null
 }
 
 export async function zoomToTaskPolygons(

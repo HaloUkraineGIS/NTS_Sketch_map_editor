@@ -16,9 +16,9 @@ const publicDir = join(root, 'public')
 
 const LAYER_KEYS = new Set([
   'task', 'evidence', 'taskGeopoint', 'taskPolygon', 'polygonGeopoint',
-  'topoPoint', 'topoLines', 'topoPolygons', 'imsmaPolygons',
+  'topoPoint', 'topoLines', 'topoPolygons', 'surveyedLine', 'imsmaPolygons',
 ])
-const EDITABLE_KEYS = new Set(['evidence', 'topoPoint', 'topoLines', 'topoPolygons'])
+const EDITABLE_KEYS = new Set(['evidence', 'topoPoint', 'topoLines', 'topoPolygons', 'surveyedLine'])
 const GEOMETRIES = new Set(['point', 'line', 'polygon'])
 
 function loadLibrary() {

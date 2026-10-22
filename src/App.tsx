@@ -416,7 +416,7 @@ function App() {
         created = result
         sessionRef.current = result
         setSessionReady(true)
-        const requiredLayers = ['task', 'evidence', 'taskGeopoint', 'taskPolygon', 'polygonGeopoint', 'topoPoint', 'topoLines', 'topoPolygons', 'imsmaPolygons'] as const
+        const requiredLayers = ['task', 'evidence', 'taskGeopoint', 'taskPolygon', 'polygonGeopoint', 'topoPoint', 'topoLines', 'topoPolygons', 'surveyedLine', 'imsmaPolygons'] as const
         const missingLayers = requiredLayers.filter((key) => !result.layers[key])
         if (missingLayers.length) setNotice({ kind: 'error', message: `WebMap завантажена, але не зіставлено шари: ${missingLayers.join(', ')}.` })
         const taskLayer = result.layers.task
@@ -858,6 +858,8 @@ function App() {
   const applyTask = useCallback(async (code: string) => {
     const current = sessionRef.current
     if (!current) return
+    // Майбутні збереження Surveyed line мають одразу отримати цей task_code.
+    current.setSelectedTaskCode(code)
     setTaskCode(code)
     setHeaderUrl(null)
     setNotice(null)
@@ -1207,7 +1209,7 @@ function App() {
     const centerHandle = reactiveUtils.watch(() => printView.center, reload)
     const scaleHandle = reactiveUtils.watch(() => printView.scale, reload)
     const editHandles: { remove(): void }[] = []
-    for (const layer of [evidence, session.layers.topoPoint, session.layers.topoLines, session.layers.topoPolygons]) {
+    for (const layer of [evidence, session.layers.topoPoint, session.layers.topoLines, session.layers.topoPolygons, session.layers.surveyedLine]) {
       if (layer) editHandles.push(layer.on('edits', reload))
     }
     return () => {
@@ -1643,7 +1645,7 @@ function App() {
       const url = URL.createObjectURL(jpeg)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `sketch-map-${taskCode}-1-${scale}-EPSG${zoneWkid}.jpg`
+      anchor.download = `${taskCode}-sketch-map.jpg`
       anchor.click()
       URL.revokeObjectURL(url)
     } catch (error) {

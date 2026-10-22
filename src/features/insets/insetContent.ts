@@ -7,12 +7,12 @@ import { getTaskPolygonsExtent } from '../../arcgis/taskFilter'
 import { projectExtent } from '../../arcgis/utm'
 
 /**
- * Вміст інсет-карт LM/BM: тільки полігони завдання + одна точка.
- * Інсети — карти-локатори: evidence, решта task-шарів і топошари там зайві.
+ * Вміст інсет-карт LM/BM: полігони завдання, одна точка та Surveyed line
+ * (відфільтрований за task_code). Evidence, решта task-шарів і топошари там зайві.
  */
 
 /** Шари, видимі в інсетах (решта ховається — лише в цій вʼю). */
-const INSET_VISIBLE_KEYS: LayerKey[] = ['taskPolygon', 'taskGeopoint']
+const INSET_VISIBLE_KEYS: LayerKey[] = ['taskPolygon', 'taskGeopoint', 'surveyedLine']
 
 /**
  * Залишає в інсеті видимими полігони завдання і ОДНУ точку (LM або конкретну BM),

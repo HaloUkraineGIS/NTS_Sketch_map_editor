@@ -30,7 +30,7 @@
             "description": "Логічні ключі шарів, де знак дозволений.",
             "items": {
               "type": "string",
-              "enum": ["task", "evidence", "taskGeopoint", "taskPolygon", "polygonGeopoint", "topoPoint", "topoLines", "topoPolygons", "imsmaPolygons"]
+              "enum": ["task", "evidence", "taskGeopoint", "taskPolygon", "polygonGeopoint", "topoPoint", "topoLines", "topoPolygons", "surveyedLine", "imsmaPolygons"]
             },
             "minItems": 1
           },

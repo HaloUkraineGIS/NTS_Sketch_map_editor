@@ -11,6 +11,7 @@ export const LAYER_URLS = {
   topoPoint: 'https://gis.htgoims.org/server/rest/services/Hosted/topo_for_sketch_map/FeatureServer/0',
   topoLines: 'https://gis.htgoims.org/server/rest/services/Hosted/topo_for_sketch_map/FeatureServer/1',
   topoPolygons: 'https://gis.htgoims.org/server/rest/services/Hosted/topo_for_sketch_map/FeatureServer/2',
+  surveyedLine: 'https://gis.htgoims.org/server/rest/services/Hosted/surveyed_line/FeatureServer/0',
   imsmaPolygons: 'https://gis.htgoims.org/server/rest/services/Ukraine/ukr_imsma_hazardous_area_status/MapServer/3',
 } as const
 
@@ -47,5 +48,6 @@ export const LAYER_ROLES = {
   topoPoint: 'editable',
   topoLines: 'editable',
   topoPolygons: 'editable',
+  surveyedLine: 'editable',
   imsmaPolygons: 'reference',
 } as const

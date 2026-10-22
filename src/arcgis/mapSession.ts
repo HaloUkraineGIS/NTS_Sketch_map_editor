@@ -8,12 +8,14 @@ import Editor from '@arcgis/core/widgets/Editor.js'
 import CreateFeaturesWorkflow from '@arcgis/core/widgets/Editor/CreateFeaturesWorkflow.js'
 import FormTemplate from '@arcgis/core/form/FormTemplate.js'
 import FieldElement from '@arcgis/core/form/elements/FieldElement.js'
+import FeatureTemplate from '@arcgis/core/layers/support/FeatureTemplate.js'
 import FeatureSnappingLayerSource from '@arcgis/core/views/interactive/snapping/FeatureSnappingLayerSource.js'
 import type FeatureLayer from '@arcgis/core/layers/FeatureLayer.js'
 import { LAYER_URLS, PORTAL_URL, WEBMAP_ITEM_ID } from '../config'
 import { DEFAULT_BASEMAP_ID, type BasemapId } from '../features/basemap/basemapOptions'
 import { allInsetBasemapLayers, createInsetBasemapLayers, type InsetBasemapLayers } from '../features/basemap/basemap'
 import type { EvidenceLibrary } from '../features/symbols/library'
+import { surveyedLineTaskField, wireSurveyedLineTaskCode } from './surveyedLine'
 
 export type LayerKey = keyof typeof LAYER_URLS
 export type MapSession = {
@@ -30,6 +32,8 @@ export type MapSession = {
   symbolWarnings: string[]
   ensureEditor: (container: HTMLDivElement) => Editor
   destroyEditor: () => void
+  /** Поточний task_code для автозапису в Surveyed line. */
+  setSelectedTaskCode: (code: string) => void
   ensurePrintView: (container: HTMLDivElement) => Promise<MapView>
   destroy: () => void
 }
@@ -54,6 +58,7 @@ function keyForLayer(layer: Layer): LayerKey | undefined {
     topoPoint: ['topopoint', 'topopoints'],
     topoLines: ['topolines', 'topoline'],
     topoPolygons: ['topopolygons', 'topopolygon'],
+    surveyedLine: ['surveyedline', 'surveyedlines'],
     imsmaPolygons: ['imsmapolygons', 'imsma_polygons', 'imsmapolygon'],
   }
   return (Object.entries(aliases).find(([, names]) => names?.includes(title))?.[0] as LayerKey | undefined)
@@ -89,6 +94,7 @@ export async function createMapSession(
   onStep?: (step: string) => void,
   onAutoCreateError?: (message: string) => void,
 ): Promise<MapSession> {
+  let selectedTaskCode = ''
   esriConfig.portalUrl = PORTAL_URL
   onStep?.('Відкриття WebMap…')
   const map = new WebMap({ portalItem: { id: WEBMAP_ITEM_ID } })
@@ -169,6 +175,29 @@ export async function createMapSession(
   let library: EvidenceLibrary | null = null
   const symbolWarnings: string[] = []
   if (insetTopoWarning) symbolWarnings.push(insetTopoWarning)
+  if (layers.surveyedLine) {
+    // Якщо сервіс дозволяє редагування, не даємо авторському WebMap-прапорцю
+    // editingEnabled=false приховати шар від Editor.
+    if (layers.surveyedLine.capabilities?.operations.supportsEditing) {
+      layers.surveyedLine.editingEnabled = true
+    }
+    if (surveyedLineTaskField(layers.surveyedLine)) {
+      wireSurveyedLineTaskCode(layers.surveyedLine, () => selectedTaskCode)
+    } else {
+      symbolWarnings.push(
+        'У шарі Surveyed line не знайдено поле task_code — автозапис коду та фільтр завдання для цього шару вимкнено.',
+      )
+    }
+    // Editor показує в панелі створення лише шари з templates. Якщо сервіс
+    // не має авторських шаблонів, даємо один стандартний, щоб шар можна було редагувати.
+    if (!layers.surveyedLine.templates?.length) {
+      layers.surveyedLine.templates = [new FeatureTemplate({
+        name: layers.surveyedLine.title || 'Surveyed line',
+        description: 'Лінія інструментальної зйомки',
+        drawingTool: 'line',
+      })]
+    }
+  }
   try {
     const { loadEvidenceLibrary, applyLibraryRenderers, applyLayerTemplates } =
       await import('../features/symbols/library')
@@ -185,27 +214,45 @@ export async function createMapSession(
   }
 
   const topoKeys: LayerKey[] = ['topoPoint', 'topoLines', 'topoPolygons']
+  // Поля, які застосунок заповнює сам і не показує у формі Editor.
+  const editorHiddenFields: Partial<Record<LayerKey, string[]>> = {
+    topoPoint: ['symbol_code'],
+    topoLines: ['symbol_code'],
+    topoPolygons: ['symbol_code'],
+    surveyedLine: ['task_code'],
+  }
+  // Порядок у панелі Editor: Surveyed line, полігони, лінії, точки. Решта шарів
+  // (переважно read-only) іде після них у порядку WebMap.
+  const editorEditableKeys: LayerKey[] = ['surveyedLine', 'topoPolygons', 'topoLines', 'topoPoint']
 
-  // Форма топо-шару: symbol_code прихований, бо код проставляється шаблоном
-  // створення. Якщо редагованих полів немає, лишаємо в формі тільки
-  // symbol_code з visibilityExpression=false: порожній formTemplate Editor
-  // ігнорує й показує всі поля, включно з symbol_code.
-  const buildTopoFormTemplate = (layer: FeatureLayer, key: LayerKey): FormTemplate | null => {
+  // Форма редагованого шару: службові поля приховані, бо їх проставляє
+  // застосунок. Якщо інших редагованих полів немає, лишаємо в формі тільки
+  // приховане поле з visibilityExpression=false: порожній formTemplate Editor
+  // ігнорує й показує всі поля, включно зі службовими.
+  const buildEditorFormTemplate = (
+    layer: FeatureLayer,
+    key: LayerKey,
+    hiddenNames: string[],
+  ): FormTemplate | null => {
     try {
-      const symbolField = layer.fields?.find((field) => field.name.toLowerCase() === 'symbol_code')?.name
+      const hiddenFields = hiddenNames
+        .map((name) => layer.fields?.find((field) => field.name.toLowerCase() === name.toLowerCase())?.name)
+        .filter((name): name is string => !!name)
+      const hidden = new Set(hiddenFields)
       const elements: FieldElement[] = []
       for (const field of layer.fields ?? []) {
         if (field.name === layer.objectIdField) continue
         if (layer.globalIdField && field.name === layer.globalIdField) continue
         if (field.editable === false) continue
-        if (symbolField && field.name === symbolField) continue
+        if (hidden.has(field.name)) continue
         elements.push(new FieldElement({ fieldName: field.name, label: field.alias || field.name }))
       }
-      if (!elements.length && symbolField) {
-        const field = layer.fields?.find((candidate) => candidate.name === symbolField)
+      if (!elements.length && hiddenFields.length) {
+        const hiddenField = hiddenFields[0]
+        const field = layer.fields?.find((candidate) => candidate.name === hiddenField)
         elements.push(new FieldElement({
-          fieldName: symbolField,
-          label: field?.alias || symbolField,
+          fieldName: hiddenField,
+          label: field?.alias || hiddenField,
           visibilityExpression: 'false',
         }))
       }
@@ -224,15 +271,26 @@ export async function createMapSession(
   // ТИМЧАСОВО для порівняння: створення повернено в Editor, власний
   // TemplatePicker приховано в App. Якщо TemplatePicker виграє — повернути
   // addEnabled: false і показати TemplatePicker назад.
-  const buildEditorLayerInfos = () =>
-    Object.entries(layers).flatMap(([key, layer]) => {
-      if (!layer) return []
+  const buildEditorLayerInfos = () => {
+    const ordered: [LayerKey, FeatureLayer][] = []
+    for (const key of editorEditableKeys) {
+      const layer = layers[key]
+      if (layer) ordered.push([key, layer])
+    }
+    for (const [key, layer] of Object.entries(layers)) {
       const layerKey = key as LayerKey
-      const isTopo = topoKeys.includes(layerKey)
-      if (!isTopo) return [{ layer, enabled: false }]
+      if (!layer || editorEditableKeys.includes(layerKey)) continue
+      ordered.push([layerKey, layer])
+    }
+    return ordered.flatMap(([layerKey, layer]) => {
+      if (!editorEditableKeys.includes(layerKey)) return [{ layer, enabled: false }]
       // Editor 5.x бере форму з layerInfo, а не з layer.formTemplate.
       // Дублюємо на шарі — для FeatureForm/попапів та інших віджетів.
-      const formTemplate = buildTopoFormTemplate(layer, layerKey)
+      const formTemplate = buildEditorFormTemplate(
+        layer,
+        layerKey,
+        editorHiddenFields[layerKey] ?? [],
+      )
       if (formTemplate) layer.formTemplate = formTemplate
       return [{
         layer,
@@ -247,16 +305,21 @@ export async function createMapSession(
         ...(formTemplate ? { formTemplate } : {}),
       }]
     })
+  }
 
-  const applyTopoFormTemplates = () => {
-    for (const key of topoKeys) {
+  const applyEditorFormTemplates = () => {
+    for (const key of editorEditableKeys) {
       const layer = layers[key]
       if (!layer) continue
-      const formTemplate = buildTopoFormTemplate(layer, key)
+      const formTemplate = buildEditorFormTemplate(
+        layer,
+        key,
+        editorHiddenFields[key] ?? [],
+      )
       if (formTemplate) layer.formTemplate = formTemplate
     }
   }
-  applyTopoFormTemplates()
+  applyEditorFormTemplates()
 
   // Автозавершення створення: після домалювання обʼєкта пишемо його одразу,
   // без кліку «Створити». Тільки потік створення (оновлення має власне збереження).
@@ -278,6 +341,10 @@ export async function createMapSession(
         const graphic = detail.graphic
         const target = graphic.layer as FeatureLayer | null
         if (!target || typeof target.applyEdits !== 'function' || !graphic.geometry) return
+        // Surveyed line зберігається штатним workflow Editor: користувач має
+        // заповнити інші атрибути, а task_code допише обгортка applyEdits.
+        const targetKey = keyForLayer(target)
+        if (!targetKey || !topoKeys.includes(targetKey)) return
         const attributes: Record<string, unknown> = {
           ...((graphic.attributes ?? {}) as Record<string, unknown>),
         }
@@ -352,6 +419,9 @@ export async function createMapSession(
         /* already destroyed */
       }
       session.editor = null
+    },
+    setSelectedTaskCode: (code: string) => {
+      selectedTaskCode = String(code ?? '').trim()
     },
     ensurePrintView: async (container: HTMLDivElement) => {
       if (session.printView) return session.printView

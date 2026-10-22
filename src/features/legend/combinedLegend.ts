@@ -54,7 +54,7 @@ export type CombinedLegend = {
 const QUERY_CAP = 2000
 const TOPO_LAYER_KEYS: LayerKey[] = ['topoPoint', 'topoLines', 'topoPolygons']
 /** Task-шари для легенди: порядок секції. Легко розширити (напр. додати 'task'). */
-export const TASK_LAYER_KEYS: LayerKey[] = ['taskGeopoint', 'polygonGeopoint', 'taskPolygon', 'imsmaPolygons']
+export const TASK_LAYER_KEYS: LayerKey[] = ['taskGeopoint', 'polygonGeopoint', 'taskPolygon', 'surveyedLine', 'imsmaPolygons']
 
 function patchDataUrl(base64: string): string {
   return `data:image/png;base64,${base64}`
@@ -208,6 +208,38 @@ function drawContain(image: HTMLImageElement, naturalW: number, naturalH: number
   return canvasBase64(canvas)
 }
 
+/**
+ * Лінійний знак Esri превʼює смугою 50×N px. Якщо вписати її в квадрат 4.5 мм
+ * через drawContain, товщина штриха зменшується в 3–4 рази — у легенді лінія
+ * виглядає значно тоншою, ніж на карті. Тому для ліній масштабуємо знак під
+ * 300 dpi і ЦЕНТРАЛЬНО ОБРІЗАЄМО до квадрата: товщина лишається 1:1 з картою,
+ * а довжина зразка просто дорівнює ширині боксу.
+ */
+function drawCroppedLine(image: HTMLImageElement, naturalW: number, naturalH: number, boxPx: number): string {
+  const canvas = document.createElement('canvas')
+  canvas.width = boxPx
+  canvas.height = boxPx
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('Браузер не створив полотно для превʼю.')
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
+  const w = Math.max(1, naturalW)
+  const h = Math.max(1, naturalH)
+  context.drawImage(image, (boxPx - w) / 2, (boxPx - h) / 2, w, h)
+  return canvasBase64(canvas)
+}
+
+function isLineSymbol(symbol: unknown): boolean {
+  const s = symbol as {
+    type?: string
+    data?: { type?: string; symbol?: { type?: string } }
+  } | null
+  if (!s) return false
+  if (s.type === 'simple-line') return true
+  const cimType = s.data?.symbol?.type ?? s.data?.type
+  return typeof cimType === 'string' && cimType.includes('Line')
+}
+
 function svgNaturalSize(svg: SVGSVGElement): { w: number; h: number } | null {
   const widthAttr = Number(svg.getAttribute('width'))
   const heightAttr = Number(svg.getAttribute('height'))
@@ -245,6 +277,8 @@ async function esriSymbolPatch(symbol: unknown, boxPx = TASK_PATCH_BOX_PX): Prom
   }
   const source = symbol as { clone?: () => unknown } | null
   const target = source && typeof source.clone === 'function' ? source.clone() : symbol
+  const lineLike = isLineSymbol(target)
+  const draw = lineLike ? drawCroppedLine : drawContain
   // Без size: превʼю в натуральному розмірі знака — як на карті.
   const node = await renderPreviewHTML(target, {})
   if (!node) throw new Error('Esri повернув порожнє превʼю.')
@@ -255,7 +289,7 @@ async function esriSymbolPatch(symbol: unknown, boxPx = TASK_PATCH_BOX_PX): Prom
     if (!natural) throw new Error('Не вдалося визначити розмір SVG-превʼю.')
     const text = new XMLSerializer().serializeToString(svg)
     const image = await loadRendererImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`)
-    return drawContain(image, natural.w * TASK_PATCH_PRINT_SCALE, natural.h * TASK_PATCH_PRINT_SCALE, boxPx)
+    return draw(image, natural.w * TASK_PATCH_PRINT_SCALE, natural.h * TASK_PATCH_PRINT_SCALE, boxPx)
   }
   const img = node.querySelector('img') ?? (node.nodeName.toLowerCase() === 'img' ? (node as unknown as HTMLImageElement) : null)
   if (img?.src) {
@@ -265,7 +299,7 @@ async function esriSymbolPatch(symbol: unknown, boxPx = TASK_PATCH_BOX_PX): Prom
     const hAttr = Number(img.getAttribute('height'))
     const naturalW = Number.isFinite(wAttr) && wAttr > 0 ? wAttr : loaded.naturalWidth || 16
     const naturalH = Number.isFinite(hAttr) && hAttr > 0 ? hAttr : loaded.naturalHeight || 16
-    return drawContain(loaded, naturalW * TASK_PATCH_PRINT_SCALE, naturalH * TASK_PATCH_PRINT_SCALE, boxPx)
+    return draw(loaded, naturalW * TASK_PATCH_PRINT_SCALE, naturalH * TASK_PATCH_PRINT_SCALE, boxPx)
   }
   throw new Error('Превʼю без svg/img.')
 }
