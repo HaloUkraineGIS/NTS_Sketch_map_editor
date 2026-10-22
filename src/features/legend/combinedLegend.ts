@@ -6,7 +6,6 @@ import type { PrintFrame } from '../print-layout/grid'
 import {
   EVIDENCE_DESCR_FIELD,
   EVIDENCE_SYMBOL_FIELD,
-  buildBadgeDataUrl,
   buildLegendPatch,
   evidenceVariantIndexes,
   findLibrarySymbol,
@@ -21,6 +20,8 @@ export type EvidenceLegendRow = {
   /** Прямий URL SVG або null (сірий патч). */
   svgUrl: string | null
   count: number
+  /** Номер варіанта (1, 2, 3…) або null. Малюється поверх знака в легенді. */
+  badge: number | null
 }
 
 export type TopoLegendRow = {
@@ -607,6 +608,7 @@ export async function getCombinedLegend(
       [...groups.values()].map((group) => ({ symbol: group.symbol, descr: group.descr })),
       library,
     )
+    const evidenceRows = [] as { row: EvidenceLegendRow; badge: number | null }[]
     for (const group of groups.values()) {
       const lib = findLibrarySymbol(library, group.symbol)
       // Прихований знак: ні патча, ні підпису в легенді.
@@ -615,24 +617,41 @@ export async function getCombinedLegend(
         warnings.push(`Невідомий symbol_code «${group.symbol}» (${group.count} об.). Додайте знак у symbols/library.json.`)
       }
       const badge = variantIndex.get(`${group.symbol}|||${group.descr}`) ?? null
-      let svgUrl: string | null = lib?.svg ? `${import.meta.env.BASE_URL}${lib.svg}` : null
-      if (badge !== null && svgUrl) {
-        try {
-          // Той самий бейдж, що цифра оверлею на карті (у редукції — той самий PNG).
-          svgUrl = await buildBadgeDataUrl(svgUrl, badge)
-        } catch {
-          /* лишається чистий SVG */
-        }
-      }
-      evidence.push({
-        symbol: group.symbol,
-        name: lib?.name ?? (group.symbol || 'Без коду'),
-        descr: group.descr,
-        svgUrl,
-        count: group.count,
+      const svgUrl: string | null = lib?.svg ? `${import.meta.env.BASE_URL}${lib.svg}` : null
+      evidenceRows.push({
+        badge,
+        row: {
+          badge,
+          symbol: group.symbol,
+          name: lib?.name ?? (group.symbol || 'Без коду'),
+          descr: group.descr,
+          svgUrl,
+          count: group.count,
+        },
       })
     }
-    evidence.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'uk'))
+    // Порядок: варіанти одного symbol_code тримаються разом (раніше
+    // сортування за окремим count розкидало їх по різних місцях легенди).
+    // Групи — за сумарною кількістю обʼєктів, далі за назвою; всередині
+    // групи — за номером варіанта (1, 2, 3…), тобто за абеткою опису.
+    const symbolTotals = new Map<string, number>()
+    for (const { row } of evidenceRows) {
+      symbolTotals.set(row.symbol, (symbolTotals.get(row.symbol) ?? 0) + row.count)
+    }
+    evidenceRows.sort((left, right) => {
+      const byTotal =
+        (symbolTotals.get(right.row.symbol) ?? 0) - (symbolTotals.get(left.row.symbol) ?? 0)
+      if (byTotal !== 0) return byTotal
+      const byName = left.row.name.localeCompare(right.row.name, 'uk')
+      if (byName !== 0) return byName
+      const bySymbol = left.row.symbol.localeCompare(right.row.symbol, 'uk')
+      if (bySymbol !== 0) return bySymbol
+      const byBadge =
+        (left.badge ?? Number.MAX_SAFE_INTEGER) - (right.badge ?? Number.MAX_SAFE_INTEGER)
+      if (byBadge !== 0) return byBadge
+      return left.row.descr.localeCompare(right.row.descr, 'uk')
+    })
+    evidence.push(...evidenceRows.map(({ row }) => row))
   }
 
   const topo: TopoLegendRow[] = []

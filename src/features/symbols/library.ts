@@ -709,7 +709,7 @@ export async function applyLibraryRenderers(
                   label: symbol.name,
                   symbol: new SimpleMarkerSymbol({
                     color: [0, 0, 0, 0],
-                    size: markerPx * 0.64,
+                    size: `${markerPx * 0.64}px`,
                     outline: { color: [0, 0, 0, 0], width: 1 },
                   }),
                 })
@@ -722,8 +722,8 @@ export async function applyLibraryRenderers(
                   label: symbol.name,
                   symbol: new PictureMarkerSymbol({
                     url: librarySymbolUrl(symbol),
-                    width: size.width,
-                    height: size.height,
+                    width: `${size.width}px`,
+                    height: `${size.height}px`,
                   }),
                 })
               }
@@ -733,7 +733,7 @@ export async function applyLibraryRenderers(
               field,
               defaultSymbol: new SimpleMarkerSymbol({
                 color: '#9aa5ad',
-                size: markerPx * 0.64,
+                size: `${markerPx * 0.64}px`,
                 outline: { color: '#ffffff', width: 1.5 },
               }),
               defaultLabel: 'Без коду / невідомий код',
@@ -892,7 +892,9 @@ export async function buildLegendPatch(symbol: LibrarySymbol | null, sizePx = TH
   }
   if (geometry === 'point' && symbol.svg) {
     const image = await loadImageCached(librarySymbolUrl(symbol))
-    drawContained(context, image, sizePx)
+    // 1:1 з картою: на карті PictureMarker займає весь бокс 4.5 мм,
+    // тож патч легенди не має відступати (раніше було 0.84 → знак дротянів).
+    drawContained(context, image, sizePx, 1)
   } else if (geometry === 'polygon') {
     context.strokeStyle = symbol.outline?.color ?? symbol.color ?? '#7b3f00'
     context.lineWidth = Math.max(3, symbol.outline?.width ?? 2)
@@ -1195,7 +1197,7 @@ export async function buildCreateSymbol(
     if (symbol.svg) {
       const base = (POINT_BASE_PX * dpi) / 96
       const size = await markerBox(symbol, base)
-      return new PictureMarkerSymbol({ url: librarySymbolUrl(symbol), width: size.width, height: size.height })
+      return new PictureMarkerSymbol({ url: librarySymbolUrl(symbol), width: `${size.width}px`, height: `${size.height}px` })
     }
     return new SimpleMarkerSymbol({
       color: symbol.color ?? '#d35400',

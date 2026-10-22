@@ -69,7 +69,7 @@ export default function InsetScaleSelect({ label, value, ariaLabel, hint, onChan
           {isPreset ? 'Інший масштаб…' : `Інший масштаб (1:${value.toLocaleString('uk-UA')})`}
         </option>
       </select>
-      {customOpen && (
+      {(customOpen || !isPreset) && (
         <div className="scale-custom-row">
           <input
             ref={inputRef}
@@ -79,7 +79,9 @@ export default function InsetScaleSelect({ label, value, ariaLabel, hint, onChan
               if (event.key === 'Enter') apply(draft)
               if (event.key === 'Escape') {
                 setDraft('')
-                setCustomOpen(false)
+                // Як у головної карти: активний довільний масштаб лишає поле
+                // відкритим, щоб одразу підібрати інше значення.
+                if (isPreset) setCustomOpen(false)
               }
             }}
             placeholder="Кратне 1000, напр. 12000"

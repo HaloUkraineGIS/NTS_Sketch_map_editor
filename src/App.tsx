@@ -166,6 +166,14 @@ const INSET_FRAME_MM = 0.2
 const INSET_GAP_MM = 4
 const INSET_MARGIN_MM = 4
 const INSET_DEFAULT_SCALE = 10000
+
+/** Легенда: рядок = патч 4.5 мм; дворядковий текст іде з мінімальним інтерліньяжем. */
+const LEGEND_ROW_MM = 4.5
+const LEGEND_PATCH_MM = 4.5
+const LEGEND_LINE_MM = 2.1
+const LEGEND_SINGLE_BASELINE_MM = 3
+const LEGEND_FIRST_BASELINE_MM = 1.75
+const LEGEND_SECOND_BASELINE_MM = LEGEND_FIRST_BASELINE_MM + LEGEND_LINE_MM
 type InsetKind = 'lm' | 'bm'
   type InsetDef = { id: string; kind: InsetKind; label: string; oid: number }
 type InsetPos = { xMm: number; yMm: number }
@@ -206,7 +214,7 @@ function legendLayout(
         overflow: 0,
       }
     }
-    const hMm = 2 + (evRows + taskRows + topoRows) * 6 + (overflow > 0 ? 5 : 0) + 2
+    const hMm = 2 + (evRows + taskRows + topoRows) * LEGEND_ROW_MM + (overflow > 0 ? 5 : 0) + 2
     const wMm = 64
     return {
       xMm: frame.widthMm - 4 - wMm,
@@ -219,7 +227,7 @@ function legendLayout(
       overflow,
     }
   }
-  const fit = Math.max(0, Math.floor((custom.hMm - 4) / 6))
+  const fit = Math.max(0, Math.floor((custom.hMm - 4) / LEGEND_ROW_MM))
   // Ручний розмір: показуємо стільки, скільки влізає по висоті, без капу 12 —
   // інакше розтягування блока не прибирає «+N». Резервуємо ~1 рядок під «+N»,
   // якщо всі записи не влізли.
@@ -793,11 +801,11 @@ function App() {
               text: String(index),
               color: 'black',
               haloColor: 'white',
-              haloSize: 1,
-              xoffset: width / 2,
-              yoffset: -height / 2,
+              haloSize: '1px',
+              xoffset: `${width / 2}px`,
+              yoffset: `${-height / 2}px`,
               // Цифра висотою в третину знака (cap-height ≈ 0.7em).
-              font: { size: Math.max(width, height) / 3 / 0.7, family: 'Arial', weight: 'bold' },
+              font: { size: `${Math.max(width, height) / 3 / 0.7}px`, family: 'Arial', weight: 'bold' },
             }),
           }),
         )
@@ -1476,12 +1484,12 @@ function App() {
       const drawLabelLines = (label: string, x: number, rowTop: number) => {
         const lines = wrapLegendLabel(label, (legendWmm - 10) / 25.4 * dpi)
         context.fillStyle = '#34495a'
-        // Рядок 6мм, патч 4.5мм по центру (центр 3мм): текст центруємо так само.
+        // Рядок 4.5мм: один рядок — по центру; два — з мінімальним інтерліньяжем 2.1мм.
         if (lines.length === 1) {
-          context.fillText(lines[0], x, rowTop + 3.7 / 25.4 * dpi)
+          context.fillText(lines[0], x, rowTop + LEGEND_SINGLE_BASELINE_MM / 25.4 * dpi)
         } else {
-          context.fillText(lines[0], x, rowTop + 2.4 / 25.4 * dpi)
-          context.fillText(lines[1], x, rowTop + 5.1 / 25.4 * dpi)
+          context.fillText(lines[0], x, rowTop + LEGEND_FIRST_BASELINE_MM / 25.4 * dpi)
+          context.fillText(lines[1], x, rowTop + LEGEND_SECOND_BASELINE_MM / 25.4 * dpi)
         }
       }
       const drawPatch = async (imageSrc: string | null, x: number, y: number, size: number) => {
@@ -1494,8 +1502,9 @@ function App() {
             const fit = Math.min(size / naturalW, size / naturalH)
             const drawW = naturalW * fit
             const drawH = naturalH * fit
-            context.drawImage(icon, x + (size - drawW) / 2, y + (size - drawH) / 2, drawW, drawH)
-            return
+            const box = { x: x + (size - drawW) / 2, y: y + (size - drawH) / 2, w: drawW, h: drawH }
+            context.drawImage(icon, box.x, box.y, box.w, box.h)
+            return box
           } catch {
             /* нижче сірий квадрат */
           }
@@ -1503,6 +1512,23 @@ function App() {
         context.fillStyle = '#9aa5ad'
         context.fillRect(x, y, size, size)
         context.fillStyle = '#34495a'
+        return null
+      }
+      // Числовий бейдж варіанта — окремим шаром поверх знака, як на карті.
+      const drawBadge = (value: number, box: { x: number; y: number; w: number; h: number }) => {
+        context.save()
+        const font = Math.max(8, Math.max(box.w, box.h) / 3 / 0.7)
+        context.font = `bold ${font}px Arial, Helvetica, sans-serif`
+        context.textAlign = 'right'
+        context.textBaseline = 'bottom'
+        const badgeX = box.x + box.w
+        const badgeY = box.y + box.h
+        context.lineWidth = Math.max(1, Math.round(font * 0.12))
+        context.strokeStyle = '#ffffff'
+        context.strokeText(String(value), badgeX, badgeY)
+        context.fillStyle = '#000000'
+        context.fillText(String(value), badgeX, badgeY)
+        context.restore()
       }
       if (!hasLegendRows) {
         context.fillText('У кадрі немає об’єктів', legendX + 2 / 25.4 * dpi, legendY + 11 / 25.4 * dpi)
@@ -1511,27 +1537,28 @@ function App() {
         let cursorMm = 2
         for (const row of legendEvidence) {
           const rowTop = legendY + cursorMm / 25.4 * dpi
-          await drawPatch(row.svgUrl, legendX + 2 / 25.4 * dpi, rowTop + 0.75 / 25.4 * dpi, 4.5 / 25.4 * dpi)
+          const evidencePatch = await drawPatch(row.svgUrl, legendX + 2 / 25.4 * dpi, rowTop + (LEGEND_ROW_MM - LEGEND_PATCH_MM) / 2 / 25.4 * dpi, LEGEND_PATCH_MM / 25.4 * dpi)
+          if (evidencePatch && row.badge !== null) drawBadge(row.badge, evidencePatch)
           drawLabelLines(row.descr || row.name, legendX + 8 / 25.4 * dpi, rowTop)
-          cursorMm += 6
+          cursorMm += LEGEND_ROW_MM
         }
         for (const row of legendTask) {
           const rowTop = legendY + cursorMm / 25.4 * dpi
-          await drawPatch(row.patchUrl, legendX + 2 / 25.4 * dpi, rowTop + 0.75 / 25.4 * dpi, 4.5 / 25.4 * dpi)
+          await drawPatch(row.patchUrl, legendX + 2 / 25.4 * dpi, rowTop + (LEGEND_ROW_MM - LEGEND_PATCH_MM) / 2 / 25.4 * dpi, LEGEND_PATCH_MM / 25.4 * dpi)
           drawLabelLines(row.label, legendX + 8 / 25.4 * dpi, rowTop)
-          cursorMm += 6
+          cursorMm += LEGEND_ROW_MM
         }
         for (const row of legendTopo) {
           const rowTop = legendY + cursorMm / 25.4 * dpi
-          await drawPatch(row.patchUrl, legendX + 2 / 25.4 * dpi, rowTop + 0.75 / 25.4 * dpi, 4.5 / 25.4 * dpi)
+          await drawPatch(row.patchUrl, legendX + 2 / 25.4 * dpi, rowTop + (LEGEND_ROW_MM - LEGEND_PATCH_MM) / 2 / 25.4 * dpi, LEGEND_PATCH_MM / 25.4 * dpi)
           drawLabelLines(row.name, legendX + 8 / 25.4 * dpi, rowTop)
-          cursorMm += 6
+          cursorMm += LEGEND_ROW_MM
         }
         if (legendOverflow > 0) {
           context.fillText(
             `+${legendOverflow} записів`,
             legendX + 2 / 25.4 * dpi,
-            legendY + cursorMm / 25.4 * dpi,
+            legendY + (cursorMm + 3.2) / 25.4 * dpi,
           )
         }
       }
@@ -2375,7 +2402,7 @@ function App() {
   <div className="legend-edge edge-right" onMouseDown={(event) => legendEdgeDown('sizeW', event)} title="Тягнути — ширина легенди" />
   <div className="legend-edge edge-bottom" onMouseDown={(event) => legendEdgeDown('sizeH', event)} title="Тягнути — висота легенди" />
   <div className="legend-edge edge-corner" onMouseDown={(event) => legendEdgeDown('sizeWH', event)} title="Тягнути — ширина і висота" />
-  {legend.evidence.length === 0 && legend.topo.length === 0 && legend.task.length === 0 ? <><div>У кадрі немає об’єктів</div><small>evidence · завдання · топо</small></> : <div className="legend-rows">{legend.evidence.slice(0, legendLayoutBox.evRows).map((row) => <div className="legend-row" key={`e:${row.symbol}|||${row.descr}`}>{row.svgUrl ? <img src={row.svgUrl} alt={row.name} /> : <span className="legend-patch" /> }<span>{row.descr || row.name}</span></div>)}{legend.task.slice(0, legendLayoutBox.taskRows).map((row) => <div className="legend-row" key={`a:${row.layerKey}:${row.label}`}><img src={row.patchUrl} alt={row.label} /><span>{row.label}</span></div>)}{legend.topo.slice(0, legendLayoutBox.topoRows).map((row) => <div className="legend-row" key={`t:${row.layerKey}:${row.code}`}><img src={row.patchUrl} alt={row.name} /><span>{row.name}</span></div>)}{legendLayoutBox.overflow > 0 && <small>+{legendLayoutBox.overflow} записів</small>}{legend.truncated && <small>…перші 2000 об’єктів</small>}</div>}{[...legendWarnings, ...legend.warnings].slice(0, 3).map((warning) => <small className="legend-warn" key={warning}>⚠ {warning}</small>)}</div>
+  {legend.evidence.length === 0 && legend.topo.length === 0 && legend.task.length === 0 ? <><div>У кадрі немає об’єктів</div><small>evidence · завдання · топо</small></> : <div className="legend-rows">{legend.evidence.slice(0, legendLayoutBox.evRows).map((row) => <div className="legend-row" key={`e:${row.symbol}|||${row.descr}`}><span className="legend-icon">{row.svgUrl ? <span className="legend-glyph"><img src={row.svgUrl} alt={row.name} />{row.badge !== null ? <i className="legend-badge">{row.badge}</i> : null}</span> : <span className="legend-patch" />}</span><span>{row.descr || row.name}</span></div>)}{legend.task.slice(0, legendLayoutBox.taskRows).map((row) => <div className="legend-row" key={`a:${row.layerKey}:${row.label}`}><img src={row.patchUrl} alt={row.label} /><span>{row.label}</span></div>)}{legend.topo.slice(0, legendLayoutBox.topoRows).map((row) => <div className="legend-row" key={`t:${row.layerKey}:${row.code}`}><img src={row.patchUrl} alt={row.name} /><span>{row.name}</span></div>)}{legendLayoutBox.overflow > 0 && <small>+{legendLayoutBox.overflow} записів</small>}{legend.truncated && <small>…перші 2000 об’єктів</small>}</div>}{[...legendWarnings, ...legend.warnings].slice(0, 3).map((warning) => <small className="legend-warn" key={warning}>⚠ {warning}</small>)}</div>
               </div>
             </div>
           </div>

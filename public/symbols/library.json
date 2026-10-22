@@ -125,6 +125,15 @@
       "color": "#000000"
     },
 
+           {
+      "code": "TOPO_REED",
+      "name": "Очерет",
+      "geometry": "point",
+      "layers": ["topoPoint"],
+      "field": "symbol_code",
+      "svg": "symbols/topo/Reed.svg",
+      "color": "#000000"
+    },
 
 
 
@@ -185,6 +194,19 @@
       "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
       "fill": { "markerSvg": "symbols/topo/garden_dot.svg", "spacingMm": 5, "markerPx": 4, "layout": "grid" }
     },
+
+{
+      "code": "TOPO_REEDS",
+      "name": "Зарості очерету",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
+      "fill": { "markerSvg": "symbols/topo/Reed.svg", "spacingMm": 7, "markerPx": 7 }
+    },
+
+
 {
           "code": "TOPO_GRAZING",
       "name": "Пасовище",
@@ -331,7 +353,7 @@
     },
     {
       "code": "TOPO_WALL",
-      "name": "Мур",
+      "name": "Стіна",
       "geometry": "line",
       "layers": ["topoLines"],
       "field": "symbol_code",
