@@ -185,6 +185,40 @@ export async function createMapSession(
   }
 
   const topoKeys: LayerKey[] = ['topoPoint', 'topoLines', 'topoPolygons']
+
+  // Форма топо-шару: symbol_code прихований, бо код проставляється шаблоном
+  // створення. Якщо редагованих полів немає, лишаємо в формі тільки
+  // symbol_code з visibilityExpression=false: порожній formTemplate Editor
+  // ігнорує й показує всі поля, включно з symbol_code.
+  const buildTopoFormTemplate = (layer: FeatureLayer, key: LayerKey): FormTemplate | null => {
+    try {
+      const symbolField = layer.fields?.find((field) => field.name.toLowerCase() === 'symbol_code')?.name
+      const elements: FieldElement[] = []
+      for (const field of layer.fields ?? []) {
+        if (field.name === layer.objectIdField) continue
+        if (layer.globalIdField && field.name === layer.globalIdField) continue
+        if (field.editable === false) continue
+        if (symbolField && field.name === symbolField) continue
+        elements.push(new FieldElement({ fieldName: field.name, label: field.alias || field.name }))
+      }
+      if (!elements.length && symbolField) {
+        const field = layer.fields?.find((candidate) => candidate.name === symbolField)
+        elements.push(new FieldElement({
+          fieldName: symbolField,
+          label: field?.alias || symbolField,
+          visibilityExpression: 'false',
+        }))
+      }
+      if (!elements.length) return null
+      return new FormTemplate({ title: layer.title || 'Обʼєкт', elements })
+    } catch (error) {
+      symbolWarnings.push(
+        `Не вдалося задати форму для ${key}: ${error instanceof Error ? error.message : 'невідома помилка'}.`,
+      )
+      return null
+    }
+  }
+
   // Evidence навмисно ВИМКНЕНО в Editor: усі правки лише через таблицю атрибутів
   // (таблиця пише applyEdits напряму і від Editor не залежить).
   // ТИМЧАСОВО для порівняння: створення повернено в Editor, власний
@@ -196,6 +230,10 @@ export async function createMapSession(
       const layerKey = key as LayerKey
       const isTopo = topoKeys.includes(layerKey)
       if (!isTopo) return [{ layer, enabled: false }]
+      // Editor 5.x бере форму з layerInfo, а не з layer.formTemplate.
+      // Дублюємо на шарі — для FeatureForm/попапів та інших віджетів.
+      const formTemplate = buildTopoFormTemplate(layer, layerKey)
+      if (formTemplate) layer.formTemplate = formTemplate
       return [{
         layer,
         enabled: true,
@@ -206,32 +244,16 @@ export async function createMapSession(
         attributeUpdatesEnabled: true,
         attachmentsOnCreateEnabled: false,
         attachmentsOnUpdateEnabled: false,
+        ...(formTemplate ? { formTemplate } : {}),
       }]
     })
 
-  // Форма топо-шарів: symbol_code взагалі приховано — шар і так вибраний
-  // шаблоном, правити код вручну не треба.
   const applyTopoFormTemplates = () => {
     for (const key of topoKeys) {
       const layer = layers[key]
       if (!layer) continue
-      try {
-        const symbolField = layer.fields?.find((field) => field.name.toLowerCase() === 'symbol_code')?.name
-        const elements = []
-        for (const field of layer.fields ?? []) {
-          if (field.name === layer.objectIdField) continue
-          if (layer.globalIdField && field.name === layer.globalIdField) continue
-          if (field.editable === false) continue
-          if (symbolField && field.name === symbolField) continue
-          elements.push(new FieldElement({ fieldName: field.name, label: field.alias || field.name }))
-        }
-        if (!elements.length) continue
-        layer.formTemplate = new FormTemplate({ title: layer.title || 'Обʼєкт', elements })
-      } catch (error) {
-        symbolWarnings.push(
-          `Не вдалося задати форму для ${key}: ${error instanceof Error ? error.message : 'невідома помилка'}.`,
-        )
-      }
+      const formTemplate = buildTopoFormTemplate(layer, key)
+      if (formTemplate) layer.formTemplate = formTemplate
     }
   }
   applyTopoFormTemplates()

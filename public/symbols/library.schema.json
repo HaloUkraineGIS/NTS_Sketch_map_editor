@@ -68,7 +68,7 @@
           },
           "pattern": {
             "type": "object",
-            "description": "Складний лінійний знак (без SVG-файлів): паралельні обводки + маркери вздовж лінії. Малюється CIMLineSymbol. Усі розміри в точках.",
+            "description": "Складний лінійний знак (без SVG-файлів): паралельні обводки + маркери вздовж лінії або міст із вусиками. Малюється CIMLineSymbol. Усі розміри в точках.",
             "properties": {
               "strokes": {
                 "type": "array",
@@ -96,6 +96,7 @@
                     "size": { "type": "number" },
                     "interval": { "type": "number" },
                     "alongOffset": { "type": "number" },
+                    "offset": { "type": "number", "description": "Перпендикулярний зсув маркера від лінії, точки; для tick — яка сторона." },
                     "thickness": { "type": "number" },
                     "placement": { "type": "string", "enum": ["along", "vertices"], "description": "along (дефолт) — через interval; vertices — на кожній вершині і кінцях." }
                   }
@@ -109,6 +110,38 @@
                   "distance": { "type": "number" },
                   "gap": { "type": "number" },
                   "color": { "type": "string" }
+                }
+              },
+              "bridge": {
+                "type": "object",
+                "description": "Міст: дві паралельні лінії з вусиками на кінцях. Усі розміри в точках CIM.",
+                "properties": {
+                  "gap": { "type": "number", "exclusiveMinimum": 0, "description": "Відстань між центрами паралельних ліній, точки." },
+                  "width": { "type": "number", "exclusiveMinimum": 0, "description": "Товщина обох ліній і вусиків, точки." },
+                  "wingLength": { "type": "number", "exclusiveMinimum": 0, "description": "Довжина вусика на кожному кінці, точки." },
+                  "wingAngle": { "type": "number", "minimum": 0, "maximum": 90, "description": "Кут вусика від продовження лінії, градуси (45 — як у зразку)." },
+                  "color": { "type": "string", "description": "Колір ліній і вусиків; без нього — color знака." }
+                }
+              }
+            }
+          },
+          "polygonPattern": {
+            "type": "object",
+            "description": "Малюнок контуру полігона: короткі штрихи, перпендикулярні до межі. Для топографічних «Яма» (inside) і «Насип» (outside).",
+            "properties": {
+              "ticks": {
+                "type": "object",
+                "required": ["side"],
+                "properties": {
+                  "side": {
+                    "type": "string",
+                    "enum": ["inside", "outside"],
+                    "description": "inside — штрихи всередину полігона (яма), outside — назовні (насип)."
+                  },
+                  "size": { "type": "number", "exclusiveMinimum": 0, "description": "Довжина штриха в точках CIM." },
+                  "interval": { "type": "number", "exclusiveMinimum": 0, "description": "Крок між штрихами вздовж контуру, точки." },
+                  "thickness": { "type": "number", "exclusiveMinimum": 0, "description": "Товщина штриха, точки." },
+                  "color": { "type": "string", "description": "Колір штрихів; без нього — колір outline або color." }
                 }
               }
             }

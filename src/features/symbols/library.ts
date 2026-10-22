@@ -46,11 +46,17 @@ export type LibrarySymbol = {
   /** Проста лінія для лінійних знаків (fallback, коли нема pattern). */
   stroke?: { color?: string; width?: number; style?: 'solid' | 'dash' | 'dot' | 'dash-dot' }
   /**
-   * Складний лінійний знак: паралельні обводки + маркери вздовж лінії.
-   * Малюється CIMLineSymbol (карта, скетч, превʼю); `stroke` лишається
-   * простим fallback. Усі розміри — в точках, як у CIM.
+   * Складний лінійний знак: паралельні обводки + маркери вздовж лінії
+   * або міст із вусиками на кінцях. Малюється CIMLineSymbol (карта, скетч,
+   * превʼю); `stroke` лишається простим fallback. Усі розміри — в точках, як у CIM.
    */
   pattern?: LinePattern
+  /**
+   * Малюнок контуру полігона: короткі штрихи, перпендикулярні до межі.
+   * Використовується для топографічних «Яма» (inside) і «Насип» (outside).
+   * Розміри — в точках CIM, як у решті pattern/outline.
+   */
+  polygonPattern?: PolygonPattern
   /** Маркер-сітка для полігонів: крок у МІЛІМЕТРАХ аркуша/екрана (сталий на всіх масштабах). */
   fill?: {
     markerSvg?: string
@@ -86,7 +92,8 @@ export type LinePatternStroke = {
  * tooth-up/down — замкнутий трикутник; check-up/down — відкрита галочка
  * вершиною на лінії (size = висота); chevron — шеврон «>» за напрямом лінії
  * (size = довжина); dot — заповнений круг (size = діаметр).
- * interval — період (для along), alongOffset — зсув, placement — along (дефолт)
+ * interval — період (для along), alongOffset — зсув уздовж лінії,
+ * offset — перпендикулярний зсув (яка сторона), placement — along (дефолт)
  * або vertices (на кожній вершині і кінцях).
  */
 export type LinePatternMarker = {
@@ -96,6 +103,8 @@ export type LinePatternMarker = {
   interval?: number
   alongOffset?: number
   thickness?: number
+  /** Перпендикулярний зсув маркера від лінії, точки (для tick — яка сторона). */
+  offset?: number
   placement?: 'along' | 'vertices'
 }
 
@@ -103,12 +112,42 @@ export type LinePattern = {
   strokes?: LinePatternStroke[]
   markers?: LinePatternMarker[]
   /**
+   * Міст: дві паралельні лінії, кінці яких розходяться вусиками назовні.
+   * gap — відстань між центрами ліній, width — їх товщина, wingLength —
+   * довжина вусика, wingAngle — кут від продовження лінії (градуси).
+   * Усі розміри в точках CIM.
+   */
+  bridge?: {
+    gap?: number
+    width?: number
+    wingLength?: number
+    wingAngle?: number
+    color?: string
+  }
+  /**
    * Парні шеврони біля вершин (ЛЕП): для кожної вершини, на кожному
    * інцидентному сегменті — пара за напрямом, центри на screen-відстані
    * distance і distance + gap від вершини. Розмір — в точках.
    * Обчислюється оверлеєм (не CIM): привʼязка до вершин, а не до інтервалу.
    */
   pairedArrows?: { size?: number; distance?: number; gap?: number; color?: string }
+}
+
+/** Короткий штрих, перпендикулярний до контуру полігона. */
+export type PolygonPatternTicks = {
+  /** inside — усередину (яма), outside — назовні (насип). */
+  side: 'inside' | 'outside'
+  /** Довжина штриха в точках CIM (1/72 дюйма). */
+  size?: number
+  /** Крок між штрихами вздовж контуру, точки. */
+  interval?: number
+  /** Товщина штриха, точки. */
+  thickness?: number
+  color?: string
+}
+
+export type PolygonPattern = {
+  ticks?: PolygonPatternTicks
 }
 
 export type EvidenceLibrary = {
@@ -535,14 +574,19 @@ function cimMarkerGraphic(
  */
 export function buildCimLineSymbol(entry: LibrarySymbol): CIMSymbol {
   const pattern = entry.pattern ?? {}
+  const bridge = pattern.bridge
   const symbolLayers: unknown[] = []
-  const strokes = pattern.strokes?.length
-    ? pattern.strokes
-    : [{
-      color: entry.stroke?.color ?? entry.color,
-      width: entry.stroke?.width,
-      style: entry.stroke?.style,
-    }]
+  // Міст — самодостатній pattern: дві паралельні лінії й вусики на кінцях.
+  // Центральну лінію/явні strokes не додаємо, інакше всередині мосту буде зайва.
+  const strokes = bridge
+    ? []
+    : pattern.strokes?.length
+      ? pattern.strokes
+      : [{
+        color: entry.stroke?.color ?? entry.color,
+        width: entry.stroke?.width,
+        style: entry.stroke?.style,
+      }]
   for (const stroke of strokes) {
     const effects: unknown[] = []
     if (stroke.offset) {
@@ -567,6 +611,78 @@ export function buildCimLineSymbol(entry: LibrarySymbol): CIMSymbol {
       ...(effects.length ? { effects } : {}),
     })
   }
+  if (bridge) {
+    const gap = bridge.gap && bridge.gap > 0 ? bridge.gap : 7
+    const width = bridge.width && bridge.width > 0 ? bridge.width : 1
+    const wingLength = bridge.wingLength && bridge.wingLength > 0 ? bridge.wingLength : 6
+    const wingAngle = Number.isFinite(bridge.wingAngle) ? bridge.wingAngle! : 45
+    const color = cimColor(bridge.color ?? entry.color)
+    const halfGap = gap / 2
+    const angle = (Math.max(0, Math.min(90, wingAngle)) * Math.PI) / 180
+    const wingDx = wingLength * Math.cos(angle)
+    const wingDy = wingLength * Math.sin(angle)
+    // Дві паралельні лінії без центральної.
+    for (const side of [-1, 1]) {
+      symbolLayers.push({
+        type: 'CIMSolidStroke',
+        enable: true,
+        color,
+        width,
+        capStyle: 'Round',
+        joinStyle: 'Round',
+        effects: [{
+          type: 'CIMGeometricEffectOffset',
+          enable: true,
+          offset: side * halfGap,
+        }],
+      })
+    }
+    // Вусики на кінцях. У CIM маркер в екстремумі орієнтується так, що
+    // локальна вісь +X дивиться НАЗОВНІ від лінії (на початку — назад,
+    // у кінці — вперед). Тому для обох кінців беремо однакову геометрію
+    // з додатним X: так вусики кожної лінії розходяться в різні боки.
+    const extent = Math.max(wingDx, halfGap + wingDy) + Math.max(width, 0.5)
+    const markerSize = Math.max(8, extent * 2)
+    const wingPaths = [
+      [[0, halfGap], [wingDx, halfGap + wingDy]],
+      [[0, -halfGap], [wingDx, -halfGap - wingDy]],
+    ]
+    for (const extremityPlacement of ['JustBegin', 'JustEnd'] as const) {
+      symbolLayers.push({
+        type: 'CIMVectorMarker',
+        enable: true,
+        size: markerSize,
+        markerPlacement: {
+          type: 'CIMMarkerPlacementAtExtremities',
+          enable: true,
+          angleToLine: true,
+          extremityPlacement,
+        },
+        frame: {
+          xmin: -extent,
+          ymin: -extent,
+          xmax: extent,
+          ymax: extent,
+        } as unknown as Extent,
+        respectFrame: true,
+        markerGraphics: [{
+          type: 'CIMMarkerGraphic',
+          geometry: { paths: wingPaths },
+          symbol: {
+            type: 'CIMLineSymbol',
+            symbolLayers: [{
+              type: 'CIMSolidStroke',
+              enable: true,
+              color,
+              width,
+              capStyle: 'Round',
+              joinStyle: 'Round',
+            }],
+          },
+        }],
+      })
+    }
+  }
   for (const marker of pattern.markers ?? []) {
     const interval = marker.interval && marker.interval > 0 ? marker.interval : 10
     const size = marker.size && marker.size > 0 ? marker.size : 4
@@ -584,6 +700,7 @@ export function buildCimLineSymbol(entry: LibrarySymbol): CIMSymbol {
         // рівно на зсув — ряди злипались назад у паралель).
         endings: 'NoConstraint',
         ...(marker.alongOffset ? { offsetAlongLine: marker.alongOffset } : {}),
+        ...(marker.offset ? { offset: marker.offset } : {}),
       }
     symbolLayers.push({
       type: 'CIMVectorMarker',
@@ -603,6 +720,95 @@ export function buildCimLineSymbol(entry: LibrarySymbol): CIMSymbol {
     } as unknown as CIMSymbolReference,
   })
 }
+
+/**
+ * CIMPolygonSymbol для знаків із штрихами по контуру (яма/насип).
+ * Маркери ставляться вздовж межі полігона; offset у точках зсуває їх
+ * усередину або назовні. Для зовнішніх і внутрішніх кілець ArcGIS
+ * орієнтує offset відносно площі полігона, тому додатково нормалізувати
+ * напрямок кілець не потрібно.
+ */
+export function buildCimPolygonSymbol(entry: LibrarySymbol): CIMSymbol {
+  const symbolLayers: unknown[] = []
+  const outlineEffects: unknown[] = []
+  const outlineDash = dashTemplateOf({ style: entry.outline?.style })
+  if (outlineDash) {
+    outlineEffects.push({
+      type: 'CIMGeometricEffectDashes',
+      enable: true,
+      dashTemplate: outlineDash,
+    })
+  }
+  symbolLayers.push({
+    type: 'CIMSolidStroke',
+    enable: true,
+    color: cimColor(entry.outline?.color ?? entry.color),
+    width: entry.outline?.width && entry.outline.width > 0 ? entry.outline.width : 0.8,
+    capStyle: 'Butt',
+    joinStyle: 'Miter',
+    ...(outlineEffects.length ? { effects: outlineEffects } : {}),
+  })
+
+  const ticks = entry.polygonPattern?.ticks
+  if (ticks) {
+    const size = ticks.size && ticks.size > 0 ? ticks.size : 4
+    const interval = ticks.interval && ticks.interval > 0 ? ticks.interval : 8
+    const thickness = ticks.thickness && ticks.thickness > 0 ? ticks.thickness : 0.6
+    const color = cimColor(ticks.color ?? entry.outline?.color ?? entry.color)
+    // Позитивний offset — назовні, негативний — усередину (перевірено
+    // для обох напрямків обходу кільця).
+    const offset = (ticks.side === 'inside' ? -1 : 1) * size / 2
+    symbolLayers.push({
+      type: 'CIMVectorMarker',
+      enable: true,
+      size,
+      markerPlacement: {
+        type: 'CIMMarkerPlacementAlongLineSameSize',
+        enable: true,
+        angleToLine: true,
+        offset,
+        endings: 'NoConstraint',
+        placementTemplate: [interval],
+      },
+      frame: {
+        xmin: -size / 2,
+        ymin: -size / 2,
+        xmax: size / 2,
+        ymax: size / 2,
+      } as unknown as Extent,
+      respectFrame: true,
+      markerGraphics: [{
+        type: 'CIMMarkerGraphic',
+        geometry: {
+          rings: [[
+            [-thickness / 2, -size / 2],
+            [thickness / 2, -size / 2],
+            [thickness / 2, size / 2],
+            [-thickness / 2, size / 2],
+            [-thickness / 2, -size / 2],
+          ]],
+        },
+        symbol: {
+          type: 'CIMPolygonSymbol',
+          symbolLayers: [{ type: 'CIMSolidFill', enable: true, color }],
+        },
+      }],
+    })
+  }
+
+  const solid = solidFillColor(entry)
+  if (solid) {
+    symbolLayers.push({ type: 'CIMSolidFill', enable: true, color: solid })
+  }
+
+  return new CIMSymbol({
+    data: {
+      type: 'CIMSymbolReference',
+      symbol: { type: 'CIMPolygonSymbol', symbolLayers },
+    } as unknown as CIMSymbolReference,
+  })
+}
+
 /** Специфікація тайла в пікселях виводу (експортовано для діагностики в UI). */
 export function tileSpec(
   symbol: LibrarySymbol,
@@ -669,7 +875,8 @@ export async function applyLibraryRenderers(
       const tile = tiles[index]
       const layout = symbol.fill?.layout ?? 'checker'
       const scatterKey = layout === 'scatter' ? JSON.stringify(symbol.fill?.scatter ?? DEFAULT_SCATTER) : ''
-      keyParts.push(`${layerKey}:${symbol.code}:${kind}:${tile.tilePx.toFixed(2)}:${tile.markerPx.toFixed(2)}:${layout}:${scatterKey}`)
+      const polygonKey = symbol.polygonPattern ? JSON.stringify(symbol.polygonPattern) : ''
+      keyParts.push(`${layerKey}:${symbol.code}:${kind}:${tile.tilePx.toFixed(2)}:${tile.markerPx.toFixed(2)}:${layout}:${scatterKey}:${polygonKey}`)
     }
     plans.set(layerKey, { layerKey, kind, symbols: group, tiles })
   }
@@ -765,6 +972,29 @@ export async function applyLibraryRenderers(
               width: outlineWidth,
               style: symbol.outline?.style ?? 'solid',
             })
+            // Яма/насип: CIMPolygonSymbol із маркерами, перпендикулярними
+            // до контуру. Не залежить від тайла й не масштабується разом із
+            // полігоном — розмір штриха сталий на папері.
+            if (symbol.polygonPattern?.ticks) {
+              try {
+                uniqueValueInfos.push({
+                  value: symbol.code,
+                  label: symbol.name,
+                  symbol: buildCimPolygonSymbol(symbol),
+                })
+              } catch (error) {
+                warnings.push(
+                  `Знак ${symbol.code}: не вдалося побудувати CIM-контур (${error instanceof Error ? error.message : 'невідома помилка'}) — простий контур.`,
+                )
+                const solid = solidFillColor(symbol)
+                uniqueValueInfos.push({
+                  value: symbol.code,
+                  label: symbol.name,
+                  symbol: new SimpleFillSymbol({ color: solid ?? [0, 0, 0, 0], outline }),
+                })
+              }
+              continue
+            }
             // Маркер-сітка лише коли тайл не вироджений (≥3px): інакше маркери
             // зіллються в суцільну пляму — чесніше чистий контур.
             // Суцільний fill.color — заливка з прозорістю (маркерів нема взагалі).
@@ -899,7 +1129,9 @@ export async function buildLegendPatch(symbol: LibrarySymbol | null, sizePx = TH
     context.strokeStyle = symbol.outline?.color ?? symbol.color ?? '#7b3f00'
     context.lineWidth = Math.max(3, symbol.outline?.width ?? 2)
     context.setLineDash(polygonOutlineDash(symbol.outline?.style))
-    const inset = sizePx * 0.15
+    // Для ями/насипу лишаємо запас під зовнішні штрихи, інакше їхні кінчики
+    // обрізаються краєм квадратного полотна.
+    const inset = sizePx * (symbol.polygonPattern?.ticks ? 0.21 : 0.15)
     context.fillStyle = fillCss(symbol)
     context.fillRect(inset, inset, sizePx - inset * 2, sizePx - inset * 2)
     context.strokeRect(inset, inset, sizePx - inset * 2, sizePx - inset * 2)
@@ -929,11 +1161,21 @@ export async function buildLegendPatch(symbol: LibrarySymbol | null, sizePx = TH
         context.drawImage(image, (sizePx - marker) / 2, (sizePx - marker) / 2, marker, marker)
       }
     }
+    if (symbol.polygonPattern?.ticks) {
+      drawPolygonBoundaryTicks(
+        context,
+        symbol.polygonPattern.ticks,
+        inset,
+        sizePx,
+        symbol.outline?.color ?? symbol.color,
+      )
+    }
   } else if (geometry === 'line') {
     // Складний pattern малюємо самі за тими самими числами, що їдуть у CIM:
     // Esri-превʼю для таких повертало не-SVG і легенда мовчки відкочувалась.
     if (symbol.pattern) {
       const has = (symbol.pattern.strokes?.length ?? 0) + (symbol.pattern.markers?.length ?? 0) > 0
+        || Boolean(symbol.pattern.bridge)
       if (has) {
         drawLinePattern(context, symbol, sizePx)
         return toDataUrl(canvas)
@@ -970,6 +1212,112 @@ function toDataUrl(canvas: HTMLCanvasElement): string {
   return dataUrl.includes(',') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl
 }
 
+/**
+ * Патч полігонального знака зі штрихами по контуру: квадрат у легенді,
+ * штрихи — з того самого боку, що й на карті (inside/outside). Розміри
+ * переводимо з точок CIM у пікселі патча (96 dpi) і трохи підсилюємо,
+ * щоб мініатюра 48 px читалась.
+ */
+function drawPolygonBoundaryTicks(
+  context: CanvasRenderingContext2D,
+  ticks: PolygonPatternTicks,
+  inset: number,
+  sizePx: number,
+  fallbackColor?: string,
+): void {
+  const outward = ticks.side === 'inside' ? -1 : 1
+  // Патч легенди — схема, а не масштаб 1:1: підсилюємо штрихи, щоб вони
+  // читались навіть у мініатюрі, і масштабуємо разом із розміром полотна.
+  const patchScale = sizePx / 48
+  const pxPerPt = (96 / 72) * patchScale
+  const length = Math.max(3, (ticks.size && ticks.size > 0 ? ticks.size : 4) * pxPerPt * 1.5)
+  const interval = Math.max(4, (ticks.interval && ticks.interval > 0 ? ticks.interval : 8) * pxPerPt * 0.85)
+  const width = Math.max(1.2, (ticks.thickness && ticks.thickness > 0 ? ticks.thickness : 0.6) * pxPerPt * 1.5)
+  const x0 = inset
+  const y0 = inset
+  const x1 = sizePx - inset
+  const y1 = sizePx - inset
+  context.strokeStyle = ticks.color ?? fallbackColor ?? '#000000'
+  context.lineWidth = width
+  context.lineCap = 'butt'
+  context.setLineDash([])
+
+  const drawSide = (
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    nx: number,
+    ny: number,
+  ) => {
+    const lengthPx = Math.hypot(bx - ax, by - ay)
+    const count = Math.max(1, Math.floor(lengthPx / interval))
+    const step = lengthPx / (count + 1)
+    const ux = (bx - ax) / lengthPx
+    const uy = (by - ay) / lengthPx
+    context.beginPath()
+    for (let index = 1; index <= count; index += 1) {
+      const x = ax + ux * step * index
+      const y = ay + uy * step * index
+      context.moveTo(x, y)
+      context.lineTo(x + nx * length * outward, y + ny * length * outward)
+    }
+    context.stroke()
+  }
+
+  drawSide(x0, y0, x1, y0, 0, -1)
+  drawSide(x1, y0, x1, y1, 1, 0)
+  drawSide(x1, y1, x0, y1, 0, 1)
+  drawSide(x0, y1, x0, y0, -1, 0)
+}
+
+/**
+ * Патч моста: дві паралельні лінії й розбіжні вусики на кінцях.
+ * Ті самі числа, що в CIM, але з підсиленням для читабельності мініатюри.
+ */
+function drawBridgePattern(
+  context: CanvasRenderingContext2D,
+  bridge: NonNullable<LinePattern['bridge']>,
+  entry: LibrarySymbol,
+  sizePx: number,
+): void {
+  const gap = bridge.gap && bridge.gap > 0 ? bridge.gap : 7
+  const width = bridge.width && bridge.width > 0 ? bridge.width : 1
+  const wingLength = bridge.wingLength && bridge.wingLength > 0 ? bridge.wingLength : 6
+  const wingAngle = Number.isFinite(bridge.wingAngle) ? bridge.wingAngle! : 45
+  const halfGap = gap / 2
+  const angle = (Math.max(0, Math.min(90, wingAngle)) * Math.PI) / 180
+  const wingDx = wingLength * Math.cos(angle)
+  const wingDy = wingLength * Math.sin(angle)
+  const maxHalf = halfGap + wingDy
+  // Уписуємо весь знак у вертикаль; на 48 px зразок можна підсилити.
+  const scale = Math.min(2, (sizePx * 0.42) / Math.max(maxHalf, 0.1))
+  const padX = Math.max(sizePx * 0.08, wingDx * scale + 1)
+  const x0 = padX
+  const x1 = sizePx - padX
+  const cy = sizePx / 2
+  const topY = cy - halfGap * scale
+  const bottomY = cy + halfGap * scale
+  context.strokeStyle = bridge.color ?? entry.color ?? '#000000'
+  context.lineWidth = Math.max(2, width * 1.5)
+  context.lineCap = 'round'
+  context.lineJoin = 'round'
+  context.setLineDash([])
+  context.beginPath()
+  context.moveTo(x0, topY)
+  context.lineTo(x1, topY)
+  context.moveTo(x0, bottomY)
+  context.lineTo(x1, bottomY)
+  // Вусики розходяться назовні: верхні — вгору, нижні — вниз.
+  for (const [x, direction] of [[x0, -1], [x1, 1]] as const) {
+    context.moveTo(x, topY)
+    context.lineTo(x + direction * wingDx * scale, topY - wingDy * scale)
+    context.moveTo(x, bottomY)
+    context.lineTo(x + direction * wingDx * scale, bottomY + wingDy * scale)
+  }
+  context.stroke()
+}
+
 /** Схематичний патч складного лінійного знака строго за pattern (ті самі числа, що в CIM). */
 function drawLinePattern(
   context: CanvasRenderingContext2D,
@@ -977,15 +1325,46 @@ function drawLinePattern(
   sizePx: number,
 ): void {
   const pattern = entry.pattern
+  if (pattern?.bridge) {
+    drawBridgePattern(context, pattern.bridge, entry, sizePx)
+    return
+  }
   const strokes = pattern?.strokes ?? []
   const markers = pattern?.markers ?? []
   if (!strokes.length && !markers.length) return
   const padX = sizePx * 0.08
   const x0 = padX
   const x1 = sizePx - padX
-  const cy = sizePx / 2
   const widthScale = 1.5
-  const offsetScale = 2
+  // На 24 px великі штрихи (схил, залізниця) інакше виходять за межі патча.
+  const offsetScale = sizePx <= 24 ? 1.5 : 2
+  const markerBounds = markers.map((marker) => {
+    const offset = (marker.offset ?? 0) * offsetScale
+    const size = (marker.size && marker.size > 0 ? marker.size : 4) * offsetScale
+    if (marker.shape === 'tick' || marker.shape === 'dot') {
+      return [offset - size / 2, offset + size / 2] as const
+    }
+    if (marker.shape === 'chevron') {
+      return [offset - size * 0.35, offset + size * 0.35] as const
+    }
+    const direction = marker.shape === 'check-up' || marker.shape === 'tooth-up' ? -1 : 1
+    const far = offset + direction * size
+    return [Math.min(offset, far), Math.max(offset, far)] as const
+  })
+  let top = Math.min(0, ...markerBounds.map(([min]) => min))
+  let bottom = Math.max(0, ...markerBounds.map(([, max]) => max))
+  for (const stroke of strokes) {
+    const y = (stroke.offset ?? 0) * offsetScale
+    const halfWidth = Math.max(3, (stroke.width ?? 2) * widthScale) / 2
+    top = Math.min(top, y - halfWidth)
+    bottom = Math.max(bottom, y + halfWidth)
+  }
+  const padY = sizePx * 0.06
+  // Центруємо весь зразок (лінію + однобічні штрихи), а не лише лінію.
+  const cy = Math.max(
+    padY - top,
+    padY + (sizePx - padY * 2 - (bottom - top)) / 2 - top,
+  )
   const dashOf = (stroke: LinePatternStroke): number[] => {
     if (stroke.dash?.length) return stroke.dash.map((d) => d * widthScale)
     switch (stroke.style ?? 'solid') {
@@ -1012,6 +1391,8 @@ function drawLinePattern(
     const interval = (marker.interval && marker.interval > 0 ? marker.interval : 10) * offsetScale
     const size = (marker.size && marker.size > 0 ? marker.size : 4) * offsetScale
     const shift = (marker.alongOffset ?? 0) * offsetScale
+    // Додатний offset — той самий бік, що й у CIM (для горизонтальної лінії).
+    const markerCy = cy + (marker.offset ?? 0) * offsetScale
     // Вершини: схематично — на кінцях зразка.
     const xs: number[] = marker.placement === 'vertices'
       ? [x0, x1]
@@ -1023,7 +1404,7 @@ function drawLinePattern(
       context.fillStyle = color
       for (const x of xs) {
         context.beginPath()
-        context.arc(x, cy, size / 2, 0, Math.PI * 2)
+        context.arc(x, markerCy, size / 2, 0, Math.PI * 2)
         context.fill()
       }
     } else if (marker.shape === 'tick') {
@@ -1034,8 +1415,8 @@ function drawLinePattern(
       )
       context.beginPath()
       for (const x of xs) {
-        context.moveTo(x, cy - size / 2)
-        context.lineTo(x, cy + size / 2)
+        context.moveTo(x, markerCy - size / 2)
+        context.lineTo(x, markerCy + size / 2)
       }
       context.stroke()
     } else if (marker.shape === 'chevron') {
@@ -1051,9 +1432,9 @@ function drawLinePattern(
       context.lineCap = 'round'
       context.beginPath()
       for (const x of xs) {
-        context.moveTo(x - halfLen, cy - halfH)
-        context.lineTo(x + halfLen, cy)
-        context.lineTo(x - halfLen, cy + halfH)
+        context.moveTo(x - halfLen, markerCy - halfH)
+        context.lineTo(x + halfLen, markerCy)
+        context.lineTo(x - halfLen, markerCy + halfH)
       }
       context.stroke()
     } else if (marker.shape === 'check-up' || marker.shape === 'check-down') {
@@ -1069,9 +1450,9 @@ function drawLinePattern(
       context.lineCap = 'round'
       context.beginPath()
       for (const x of xs) {
-        context.moveTo(x - half, cy + direction * size)
-        context.lineTo(x, cy)
-        context.lineTo(x + half, cy + direction * size)
+        context.moveTo(x - half, markerCy + direction * size)
+        context.lineTo(x, markerCy)
+        context.lineTo(x + half, markerCy + direction * size)
       }
       context.stroke()
     } else {
@@ -1086,9 +1467,9 @@ function drawLinePattern(
       // Зубець гостряком до лінії, як у CIM.
       context.beginPath()
       for (const x of xs) {
-        context.moveTo(x - half, cy + direction * size)
-        context.lineTo(x + half, cy + direction * size)
-        context.lineTo(x, cy)
+        context.moveTo(x - half, markerCy + direction * size)
+        context.lineTo(x + half, markerCy + direction * size)
+        context.lineTo(x, markerCy)
         context.closePath()
       }
       context.stroke()
@@ -1225,6 +1606,13 @@ export async function buildCreateSymbol(
     width: outlineWidth,
     style: symbol.outline?.style ?? 'solid',
   })
+  if (symbol.polygonPattern?.ticks) {
+    try {
+      return buildCimPolygonSymbol(symbol)
+    } catch {
+      /* нижче простий контур */
+    }
+  }
   if (!symbol.fill?.markerSvg || !symbol.fill?.spacingMm) {
     const solid = solidFillColor(symbol)
     return new SimpleFillSymbol({ color: solid ?? [0, 0, 0, 0], outline })

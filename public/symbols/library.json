@@ -219,13 +219,13 @@
     },
     {
       "code": "TOPO_SWAMP",
-      "name": "Болото",
+      "name": "Заболочена/Затоплена місцевість",
       "geometry": "polygon",
       "layers": ["topoPolygons"],
       "field": "symbol_code",
-      "color": "#2e86c1",
+      "color": "#000000",
       "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
-      "fill": { "markerSvg": "symbols/topo/swamp_tuft.svg", "spacingMm": 3, "markerPx": 10 }
+      "fill": { "markerSvg": "symbols/topo/swamp_tuft.svg", "spacingMm": 8, "markerPx": 8, "layout": "scatter", "scatter": [{ "dx": 0.8, "dy": 0.1, "rotate": 0 }, { "dx": 0.4, "dy": 0.6, "rotate": 0 }, { "dx": 0.1, "dy": 0.2, "rotate": 0 }] }
     },
     {
       "code": "TOPO_WATER",
@@ -238,6 +238,30 @@
       "fill": { "color": "#7cc8f7", "opacity": 0.7 }
     },
     
+    {
+      "code": "TOPO_PIT",
+      "name": "Яма",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "outline": { "color": "#000000", "width": 0.8 },
+      "polygonPattern": {
+        "ticks": { "side": "inside", "size": 5, "interval": 8, "thickness": 0.6 }
+      }
+    },
+    {
+      "code": "TOPO_EMBANKMENT",
+      "name": "Насип",
+      "geometry": "polygon",
+      "layers": ["topoPolygons"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "outline": { "color": "#000000", "width": 0.8 },
+      "polygonPattern": {
+        "ticks": { "side": "outside", "size": 5, "interval": 8, "thickness": 0.6 }
+      }
+    },
     {
       "code": "TOPO_POWERLINE",
       "name": "Лінія електропередач",
@@ -263,7 +287,7 @@
       "color": "#424242",
       "stroke": { "color": "#424242", "width": 1, "style": "dash" },
       "pattern": {
-        "strokes": [{ "color": "#424242", "width": 1, "dash": [5, 2] }]
+        "strokes": [{ "color": "#424242", "width": 0.6, "dash": [5, 2] }]
       }
     },
 
@@ -304,8 +328,8 @@
       "stroke": { "color": "#3d3d3d", "width": 3, "style": "solid" },
       "pattern": {
         "strokes": [
-          { "color": "#3d3d3d", "width": 0.7, "offset": -3.2 },
-          { "color": "#3d3d3d", "width": 0.7, "offset": 3.2 }
+          { "color": "#3d3d3d", "width": 0.6, "offset": -3.2 },
+          { "color": "#3d3d3d", "width": 0.6, "offset": 3.2 }
         ]
       }
     },
@@ -335,7 +359,7 @@
       "stroke": { "color": "#424242", "width": 2, "style": "solid" },
       "pattern": {
         "strokes": [{ "color": "#424242", "width": 1 }],
-        "markers": [{ "shape": "dot", "color": "#424242", "size": 6, "interval": 30 }]
+        "markers": [{ "shape": "dot", "color": "#424242", "size": 6, "interval": 18 }]
       }
     },
     {
@@ -365,6 +389,34 @@
           { "color": "#222222", "width": 0.6, "offset": 1 }
         ],
         "markers": [{ "shape": "tick", "color": "#222222", "size": 2.4, "thickness": 0.6, "interval": 16 }]
+      }
+    },
+    {
+      "code": "TOPO_SLOPE",
+      "name": "Схил",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "stroke": { "color": "#000000", "width": 0.7, "style": "solid" },
+      "pattern": {
+        "strokes": [{ "color": "#000000", "width": 0.7 }],
+        "markers": [
+          { "shape": "tick", "color": "#000000", "size": 15, "thickness": 0.7, "interval": 10, "offset": 4 },
+          { "shape": "tick", "color": "#000000", "size": 4, "thickness": 0.7, "interval": 10, "alongOffset": 5, "offset": 2 }
+        ]
+      }
+    },
+    {
+      "code": "TOPO_BRIDGE",
+      "name": "Міст",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#000000",
+      "stroke": { "color": "#000000", "width": 1, "style": "solid" },
+      "pattern": {
+        "bridge": { "gap": 7, "width": 1, "wingLength": 6, "wingAngle": 57, "color": "#000000" }
       }
     }
 

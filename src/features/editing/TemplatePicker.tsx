@@ -267,7 +267,10 @@ function TemplatePreview({ symbol }: { symbol: LibrarySymbol }) {
   }
   useEffect(() => {
     let alive = true
-    if (geometry === 'line' && symbol.pattern && !symbol.svg) {
+    const needsPatternPatch =
+      (geometry === 'line' && symbol.pattern && !symbol.svg) ||
+      (geometry === 'polygon' && symbol.polygonPattern)
+    if (needsPatternPatch) {
       void import('../symbols/library').then(({ buildLegendPatch }) => buildLegendPatch(symbol, 48))
         .then((base64) => {
           if (alive) setPatternPatch({ code: symbol.code, url: `data:image/png;base64,${base64}` })
@@ -316,6 +319,15 @@ function TemplatePreview({ symbol }: { symbol: LibrarySymbol }) {
         className="template-line"
         style={{ background: symbol.stroke?.color ?? symbol.color ?? '#555' }}
         aria-hidden="true"
+      />
+    )
+  }
+  if (geometry === 'polygon' && patternPatch.url) {
+    return (
+      <img
+        className="template-img"
+        src={patternPatch.url}
+        alt={symbol.name}
       />
     )
   }

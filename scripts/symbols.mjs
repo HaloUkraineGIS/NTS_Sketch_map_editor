@@ -84,10 +84,11 @@ function check() {
     if (symbol.pattern) {
       const strokes = symbol.pattern.strokes ?? []
       const markers = symbol.pattern.markers ?? []
+      const bridge = symbol.pattern.bridge
       if (!Array.isArray(strokes) || !Array.isArray(markers)) {
         errors.push(`${symbol.code}: pattern.strokes/markers мають бути масивами.`)
       } else {
-        if (strokes.length === 0 && markers.length === 0) {
+        if (strokes.length === 0 && markers.length === 0 && !bridge) {
           errors.push(`${symbol.code}: порожній pattern.`)
         }
         strokes.forEach((stroke, index) => {
@@ -106,6 +107,9 @@ function check() {
           if (marker.placement !== 'vertices' && !(marker.interval > 0)) {
             errors.push(`${symbol.code}: markers[${index}].interval має бути > 0.`)
           }
+          if (marker.offset !== undefined && typeof marker.offset !== 'number') {
+            errors.push(`${symbol.code}: markers[${index}].offset має бути числом.`)
+          }
         })
         const paired = symbol.pattern.pairedArrows
         if (paired !== undefined) {
@@ -118,6 +122,44 @@ function check() {
               }
             }
           }
+        }
+        if (bridge !== undefined) {
+          if (typeof bridge !== 'object' || bridge === null) {
+            errors.push(`${symbol.code}: pattern.bridge має бути обʼєктом.`)
+          } else {
+            for (const key of ['gap', 'width', 'wingLength']) {
+              if (bridge[key] !== undefined && !(bridge[key] > 0)) {
+                errors.push(`${symbol.code}: pattern.bridge.${key} має бути > 0.`)
+              }
+            }
+            if (bridge.wingAngle !== undefined && !(bridge.wingAngle >= 0 && bridge.wingAngle <= 90)) {
+              errors.push(`${symbol.code}: pattern.bridge.wingAngle має бути 0…90.`)
+            }
+            if (bridge.color !== undefined && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(bridge.color)) {
+              errors.push(`${symbol.code}: pattern.bridge.color має бути hex (#rgb/#rrggbb).`)
+            }
+          }
+        }
+      }
+    }
+    if (symbol.polygonPattern) {
+      if (geometry !== 'polygon') {
+        warnings.push(`${symbol.code}: polygonPattern задано не для полігона — буде проігноровано.`)
+      }
+      const ticks = symbol.polygonPattern.ticks
+      if (!ticks || typeof ticks !== 'object') {
+        errors.push(`${symbol.code}: polygonPattern.ticks має бути об'єктом.`)
+      } else {
+        if (ticks.side !== 'inside' && ticks.side !== 'outside') {
+          errors.push(`${symbol.code}: polygonPattern.ticks.side має бути inside або outside.`)
+        }
+        for (const key of ['size', 'interval', 'thickness']) {
+          if (ticks[key] !== undefined && !(ticks[key] > 0)) {
+            errors.push(`${symbol.code}: polygonPattern.ticks.${key} має бути > 0.`)
+          }
+        }
+        if (ticks.color !== undefined && !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(ticks.color)) {
+          errors.push(`${symbol.code}: polygonPattern.ticks.color має бути hex (#rgb/#rrggbb).`)
         }
       }
     }

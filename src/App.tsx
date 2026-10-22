@@ -57,6 +57,9 @@ const frameFor = (orientation: Orientation): PrintFrame => {
   return { leftMm, topMm, widthMm: rightMm - leftMm, heightMm: bottomMm - topMm }
 }
 
+/** Запас навколо полігонів завдання, щоб їхні межі не торкались рамки друку. */
+const PRINT_FIT_PADDING = 1.08
+
 /** Дефолтна позиція інсета за порядком у списку: LM перша, BM каскадом униз ліворуч. */
 function defaultPosFor(frame: PrintFrame, defs: InsetDef[], id: string): InsetPos {
   const order = Math.max(0, defs.findIndex((def) => def.id === id))
@@ -328,6 +331,8 @@ function App() {
   useEffect(() => { insetMoveRef.current = insetMove }, [insetMove])
   const editMapRef = useRef<HTMLDivElement>(null)
   const printMapRef = useRef<HTMLDivElement>(null)
+  /** Скільки авто-вписувань у рамку триває: вотчер масштабу не має їм заважати. */
+  const printFitRef = useRef(0)
   const insetMapRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const insetViewsRef = useRef<Record<string, MapView | null>>({})
   const insetCentersRef = useRef<Record<string, Point>>({})
@@ -538,32 +543,54 @@ function App() {
   async function fitPrintToTaskPolygons(view: MapView) {
     const session = sessionRef.current
     if (!session || taskIdsRef.current.length === 0) return false
-    const { getTaskPolygonsExtent } = await import('./arcgis/taskFilter')
-    const { projectExtent, goToExtent, goToScale } = await import('./arcgis/utm')
-    const extent = await getTaskPolygonsExtent(session.layers, taskIdsRef.current)
-    if (!extent) return false
-    const printFrame = frameRef.current
-    const projected = await projectExtent(extent, zoneWkidRef.current).catch(() => null)
-    if (projected && projected.width > 0 && projected.height > 0) {
-      const required = Math.max(
-        (projected.width / printFrame.widthMm) * 1000,
-        (projected.height / printFrame.heightMm) * 1000,
-      )
-      const preset =
-        PRINT_SCALES.find((presetScale) => presetScale >= required) ??
+    printFitRef.current += 1
+    try {
+      const { getTaskPolygonsExtent } = await import('./arcgis/taskFilter')
+      const { projectExtent, goToExtent, goToScale, goToCenterAndScale } = await import('./arcgis/utm')
+      const extent = await getTaskPolygonsExtent(session.layers, taskIdsRef.current)
+      if (!extent) return false
+      const printFrame = frameRef.current
+      // Проєктуємо саме в СК вʼю: `view.resolution` виражена в її одиницях.
+      const targetWkid = view.spatialReference?.wkid ?? zoneWkidRef.current
+      const projected = await projectExtent(extent, targetWkid).catch(() => null)
+      if (projected && projected.width > 0 && projected.height > 0) {
+        // Поля навколо екстенту: без них полігон притискався до самої рамки,
+        // а при найменшому розходженні аспектів частина його виходила за кадр.
+        const padded = projected.expand(PRINT_FIT_PADDING)
+        // Рахуємо від реального розміру вʼю в пікселях, а не від мм аркуша:
+        // превʼю на екрані масштабується під вікно, тож «паперовий» масштаб
+        // давав замалий екстент і полігони вилазили за рамку.
+        const viewWidth = view.width
+        const viewHeight = view.height
+        const resolution = view.resolution
+        const required = viewWidth > 0 && viewHeight > 0 && resolution > 0 && view.scale > 0
+          ? Math.max(padded.width / viewWidth, padded.height / viewHeight) * (view.scale / resolution)
+          : Math.max(
+            (padded.width / printFrame.widthMm) * 1000,
+            (padded.height / printFrame.heightMm) * 1000,
+          )
+        const preset =
+          PRINT_SCALES.find((presetScale) => presetScale >= required) ??
+          PRINT_SCALES[PRINT_SCALES.length - 1]
+        // Центр і масштаб — одним goTo, інакше присвоєння view.center
+        // скасовується наступним goTo і полігони лишаються збоку від кадру.
+        // Ref оновлюємо до руху: вотчер масштабу бачить уже нову ціль і не смикає вʼю назад.
+        scaleRef.current = preset
+        await goToCenterAndScale(view, padded.center, preset)
+        setScale(preset)
+        return true
+      }
+      await goToExtent(view, extent.expand(1.25))
+      const fallback =
+        PRINT_SCALES.find((presetScale) => presetScale >= view.scale) ??
         PRINT_SCALES[PRINT_SCALES.length - 1]
-      view.center = projected.center
-      setScale(preset)
-      await goToScale(view, preset)
+      scaleRef.current = fallback
+      await goToScale(view, fallback)
+      setScale(fallback)
       return true
+    } finally {
+      printFitRef.current -= 1
     }
-    await goToExtent(view, extent.expand(1.25))
-    const fallback =
-      PRINT_SCALES.find((presetScale) => presetScale >= view.scale) ??
-      PRINT_SCALES[PRINT_SCALES.length - 1]
-    setScale(fallback)
-    await goToScale(view, fallback)
-    return true
   }
 
   function destroyInsetViews() {
@@ -895,11 +922,13 @@ function App() {
     // Масштаб перевиставляємо лише при дрейфі > 0.5% і з дебаунсом,
     // і лише при валідному живому масштабі — інакше goTo-спам не дає в’ю заспокоїтись.
     const ensureScale = () => {
-      if (!active) return
+      if (!active || printFitRef.current > 0) return
       const live = printView.scale
       if (!Number.isFinite(live) || live <= 0) return
-      if (Math.abs(live - scale) / scale > 0.005) {
-        void printView.goTo({ center: printView.center, scale }, { animate: false }).catch(() => {
+      const target = scaleRef.current
+      if (!Number.isFinite(target) || target <= 0) return
+      if (Math.abs(live - target) / target > 0.005) {
+        void printView.goTo({ center: printView.center, scale: target }, { animate: false }).catch(() => {
           /* перервано новішим goTo або в’ю знищено */
         })
       }

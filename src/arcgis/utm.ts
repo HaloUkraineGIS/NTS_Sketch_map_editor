@@ -120,6 +120,21 @@ export async function goToScale(view: MapView, scale: number, timeoutMs = 15000)
   ])
 }
 
+/**
+ * Центр і масштаб одним goTo. Окреме присвоєння `view.center` асинхронне:
+ * наступний `goTo` міг скасувати його й повернути старий центр — саме через це
+ * полігони завдання виходили за рамку друку при правильному масштабі.
+ */
+export async function goToCenterAndScale(view: MapView, center: Point, scale: number, timeoutMs = 15000) {
+  if (!Number.isFinite(scale) || scale <= 0) return
+  await Promise.race([
+    view.goTo({ center, scale }, { animate: false }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Не вдалося встановити масштаб 1:${scale} за ${Math.round(timeoutMs / 1000)} с.`)), timeoutMs),
+    ),
+  ])
+}
+
 export type SuspendedLayerInfo = { title: string; isBasemap: boolean }
 
 /**
