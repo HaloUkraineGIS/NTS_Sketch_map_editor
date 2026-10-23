@@ -356,6 +356,16 @@ function App() {
   const [paperPx, setPaperPx] = useState({ w: 0, h: 0 })
   const frame = useMemo(() => frameFor(orientation), [orientation])
   const page = useMemo(() => a4Dimensions(orientation), [orientation])
+  // Друкова сторінка завжди має «паперовий» розмір у CSS px при 96 dpi.
+  // MapView усередині бачить саме ці px, тому view.scale = масштаб на папері,
+  // а сітка/експорт не залежать від того, як сторінка вписана у вікно.
+  const designPx = useMemo(() => ({
+    w: page.widthMm * 96 / 25.4,
+    h: page.heightMm * 96 / 25.4,
+  }), [page])
+  const paperScale = paperPx.w > 0 && paperPx.h > 0
+    ? Math.min(paperPx.w / designPx.w, paperPx.h / designPx.h)
+    : 1
   const scaleSpec = useMemo(() => scaleBarSpec(scale), [scale])
   const scaleUrl = useMemo(() => scaleBarDataUrl(scaleSpec), [scaleSpec])
   const frameStyle = useMemo(() => ({
@@ -563,18 +573,13 @@ function App() {
         // Поля навколо екстенту: без них полігон притискався до самої рамки,
         // а при найменшому розходженні аспектів частина його виходила за кадр.
         const padded = projected.expand(PRINT_FIT_PADDING)
-        // Рахуємо від реального розміру вʼю в пікселях, а не від мм аркуша:
-        // превʼю на екрані масштабується під вікно, тож «паперовий» масштаб
-        // давав замалий екстент і полігони вилазили за рамку.
-        const viewWidth = view.width
-        const viewHeight = view.height
-        const resolution = view.resolution
-        const required = viewWidth > 0 && viewHeight > 0 && resolution > 0 && view.scale > 0
-          ? Math.max(padded.width / viewWidth, padded.height / viewHeight) * (view.scale / resolution)
-          : Math.max(
-            (padded.width / printFrame.widthMm) * 1000,
-            (padded.height / printFrame.heightMm) * 1000,
-          )
+        // Вʼю друку має фіксований «паперовий» розмір (96 dpi), тому масштаб
+        // вписування рахуємо прямо від мм кадру, а не від екранних пікселів.
+        // Це той самий масштаб, який бачать сітка, лінійка та JPEG.
+        const required = Math.max(
+          (padded.width / printFrame.widthMm) * 1000,
+          (padded.height / printFrame.heightMm) * 1000,
+        )
         const preset =
           PRINT_SCALES.find((presetScale) => presetScale >= required) ??
           PRINT_SCALES[PRINT_SCALES.length - 1]
@@ -1339,6 +1344,11 @@ function App() {
     try {
       const { whenViewSettled } = await import('./arcgis/utm')
       await printView.when()
+      // Експорт має бути рівно в обраному масштабі: інакше сітка/лінійка
+      // рахуються від `scale`, а карта ще стоїть у сусідньому значенні.
+      if (Number.isFinite(scale) && scale > 0 && (!Number.isFinite(printView.scale) || Math.abs(printView.scale - scale) / scale > 1e-4)) {
+        await printView.goTo({ center: printView.center, scale }, { animate: false })
+      }
       await whenViewSettled(printView, 30000, 'Друкована карта')
       const viewWkid = printView.spatialReference?.wkid
       if (viewWkid !== zoneWkid) {
@@ -1963,7 +1973,9 @@ function App() {
     const card = legendCardRef.current
     if (!card) return
     const printFrame = frameRef.current
-    const mmPerPx = legendLayoutBox.wMm / Math.max(1, card.clientWidth)
+    // Сторінка друку вписана transform: scale(...), тому clientWidth — це
+    // дизайнерська ширина, а не видима. Для руху мишки беремо реальний rect.
+    const mmPerPx = legendLayoutBox.wMm / Math.max(1, card.getBoundingClientRect().width)
     const origHmm = legendLayoutBox.hMm
     legendDragRef.current = {
       mode,
@@ -2008,7 +2020,7 @@ function App() {
     const node = frameNodeRef.current
     if (!node) return
     const printFrame = frameRef.current
-    const mmPerPx = printFrame.widthMm / Math.max(1, node.clientWidth)
+    const mmPerPx = printFrame.widthMm / Math.max(1, node.getBoundingClientRect().width)
     const orig = northEff
     const startX = event.clientX
     const startY = event.clientY
@@ -2041,7 +2053,7 @@ function App() {
     const node = frameNodeRef.current
     if (!node) return
     const printFrame = frameRef.current
-    const mmPerPx = printFrame.widthMm / Math.max(1, node.clientWidth)
+    const mmPerPx = printFrame.widthMm / Math.max(1, node.getBoundingClientRect().width)
     const orig = insetPos[id] ?? defaultPosFor(frame, insets, id)
     const size = insetSize[id] ?? { wMm: INSET_W_MM, hMm: INSET_H_MM }
     const startX = event.clientX
@@ -2077,7 +2089,7 @@ function App() {
     const node = frameNodeRef.current
     if (!node) return
     const printFrame = frameRef.current
-    const mmPerPx = printFrame.widthMm / Math.max(1, node.clientWidth)
+    const mmPerPx = printFrame.widthMm / Math.max(1, node.getBoundingClientRect().width)
     const pos0 = insetPos[id] ?? defaultPosFor(frame, insets, id)
     const size0 = insetSize[id] ?? { wMm: INSET_W_MM, hMm: INSET_H_MM }
     const startX = event.clientX
@@ -2108,7 +2120,7 @@ function App() {
     const node = frameNodeRef.current
     if (!node) return
     const printFrame = frameRef.current
-    const mmPerPx = printFrame.widthMm / Math.max(1, node.clientWidth)
+    const mmPerPx = printFrame.widthMm / Math.max(1, node.getBoundingClientRect().width)
     const orig = logoEff
     const startX = event.clientX
     const startY = event.clientY
@@ -2137,7 +2149,7 @@ function App() {
     const node = frameNodeRef.current
     if (!node) return
     const printFrame = frameRef.current
-    const mmPerPx = printFrame.widthMm / Math.max(1, node.clientWidth)
+    const mmPerPx = printFrame.widthMm / Math.max(1, node.getBoundingClientRect().width)
     const orig = headerEff
     const startX = event.clientX
     const startY = event.clientY
@@ -2166,7 +2178,7 @@ function App() {
     const node = frameNodeRef.current
     if (!node) return
     const printFrame = frameRef.current
-    const mmPerPx = printFrame.widthMm / Math.max(1, node.clientWidth)
+    const mmPerPx = printFrame.widthMm / Math.max(1, node.getBoundingClientRect().width)
     const orig = scaleEff
     const spec = scaleSpec
     const startX = event.clientX
@@ -2196,7 +2208,7 @@ function App() {
     const node = frameNodeRef.current
     if (!node) return
     const printFrame = frameRef.current
-    const mmPerPx = printFrame.widthMm / Math.max(1, node.clientWidth)
+    const mmPerPx = printFrame.widthMm / Math.max(1, node.getBoundingClientRect().width)
     const orig = stampEff
     const startX = event.clientX
     const startY = event.clientY
@@ -2314,8 +2326,9 @@ function App() {
           </div>
           <div className={`map-pane print-map ${tab === 'print' ? 'pane-visible' : ''}`}>
             <div ref={paperWrapRef} className={`paper-wrap ${orientation}`}>
-              <div ref={pageRef} className={`print-page ${orientation}`} style={{ aspectRatio: `${page.widthMm} / ${page.heightMm}`, width: paperPx.w || undefined, height: paperPx.h || undefined }}>
-                <div className="print-map-frame" ref={frameNodeRef} style={frameStyle}><div className="map-canvas" ref={printMapRef}/><img
+              <div className="paper-scale" style={{ width: paperPx.w || designPx.w, height: paperPx.h || designPx.h, visibility: paperPx.w > 0 ? undefined : 'hidden' }}>
+                <div ref={pageRef} className={`print-page ${orientation}`} style={{ width: designPx.w, height: designPx.h, maxWidth: 'none', maxHeight: 'none', transform: `scale(${paperScale})`, transformOrigin: 'top left' }}>
+                  <div className="print-map-frame" ref={frameNodeRef} style={frameStyle}><div className="map-canvas" ref={printMapRef}/><img
   src={`${import.meta.env.BASE_URL}${NORTH_ARROW_SRC}`}
   alt="Північ"
   className="north-arrow-img"
@@ -2446,6 +2459,7 @@ function App() {
   <div className="legend-edge edge-bottom" onMouseDown={(event) => legendEdgeDown('sizeH', event)} title="Тягнути — висота легенди" />
   <div className="legend-edge edge-corner" onMouseDown={(event) => legendEdgeDown('sizeWH', event)} title="Тягнути — ширина і висота" />
   {legend.evidence.length === 0 && legend.topo.length === 0 && legend.task.length === 0 ? <><div>У кадрі немає об’єктів</div><small>evidence · завдання · топо</small></> : <div className="legend-rows">{legend.evidence.slice(0, legendLayoutBox.evRows).map((row) => <div className="legend-row" key={`e:${row.symbol}|||${row.descr}`}><span className="legend-icon">{row.svgUrl ? <span className="legend-glyph"><img src={row.svgUrl} alt={row.name} />{row.badge !== null ? <i className="legend-badge">{row.badge}</i> : null}</span> : <span className="legend-patch" />}</span><span>{row.descr || row.name}</span></div>)}{legend.task.slice(0, legendLayoutBox.taskRows).map((row) => <div className="legend-row" key={`a:${row.layerKey}:${row.label}`}><img src={row.patchUrl} alt={row.label} /><span>{row.label}</span></div>)}{legend.topo.slice(0, legendLayoutBox.topoRows).map((row) => <div className="legend-row" key={`t:${row.layerKey}:${row.code}`}><img src={row.patchUrl} alt={row.name} /><span>{row.name}</span></div>)}{legendLayoutBox.overflow > 0 && <small>+{legendLayoutBox.overflow} записів</small>}{legend.truncated && <small>…перші 2000 об’єктів</small>}</div>}{[...legendWarnings, ...legend.warnings].slice(0, 3).map((warning) => <small className="legend-warn" key={warning}>⚠ {warning}</small>)}</div>
+                </div>
               </div>
             </div>
           </div>

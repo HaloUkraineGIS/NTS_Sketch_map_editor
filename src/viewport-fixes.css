@@ -712,3 +712,27 @@
   pointer-events: none;
   text-shadow: 0 0 2px #ffffff, 0 0 3px #ffffff;
 }
+
+/* Друк: сторінка має фіксований 96-dpi розмір, а до вікна вписується через
+   transform. MapView усередині бачить ті самі px, що й фізичні мм кадру, тому
+   UTM-сітка, масштабна лінійка та JPEG не залежать від розміру вікна. */
+.paper-wrap > .paper-scale {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.paper-scale > .print-page {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: top left;
+  /* Рамки не мають зʼїдати 1–2 px з «паперового» розміру: інакше MapView
+     стає трохи вужчим за кадр, і масштаб JPEG відрізняється від сітки. */
+  border: 0;
+  box-shadow: 0 8px 32px #344b5f35, 0 0 0 1px #d8dfe2;
+}
+.paper-scale .print-map-frame {
+  border: 0;
+  box-shadow: inset 0 0 0 1px #293c4b;
+}
