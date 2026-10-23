@@ -61,7 +61,13 @@ function keyForLayer(layer: Layer): LayerKey | undefined {
     surveyedLine: ['surveyedline', 'surveyedlines'],
     imsmaPolygons: ['imsmapolygons', 'imsma_polygons', 'imsmapolygon'],
   }
-  return (Object.entries(aliases).find(([, names]) => names?.includes(title))?.[0] as LayerKey | undefined)
+  const exact = Object.entries(aliases).find(([, names]) => names?.includes(title))?.[0] as LayerKey | undefined
+  if (exact) return exact
+  // Автор WebMap міг перейменувати шар («Evidence points (live)» тощо).
+  // Такі назви не ламають зіставлення; неточний збіг — лише останній шанс.
+  if (title.includes('evidence')) return 'evidence'
+  if (title.includes('surveyed')) return 'surveyedLine'
+  return undefined
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {

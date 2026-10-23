@@ -8,6 +8,7 @@ import { EVIDENCE_ANGLE_FIELD, EVIDENCE_DESCR_MAX, EVIDENCE_HIDDEN_CODE, loadEvi
 import {
   EVIDENCE_PAGE_SIZE,
   findEvidencePage,
+  getEvidenceWhere,
   queryEvidencePage,
   saveEvidenceRow,
   type EvidenceRow,
@@ -188,19 +189,85 @@ export default function EvidenceTable({ view, layer, taskCode, onSaved }: Props)
   // Клік по точці evidence на карті — вибрати її рядок у таблиці.
   // Порожній клік вибір не скидає (для цього є кнопка Clear).
   useEffect(() => {
+    const normalizeUrl = (url?: string | null) =>
+      String(url ?? '').split('?')[0].replace(/\/+$/, '').toLowerCase()
+
+    /** HitTest може віддати шар у result.layer, graphic.layer або graphic.sourceLayer. */
+    const sameLayer = (candidate: unknown) => {
+      if (!candidate || typeof candidate !== 'object') return false
+      if (candidate === layer) return true
+      const value = candidate as { id?: string; uid?: string; url?: string }
+      if (value.id && layer.id && value.id === layer.id) return true
+      if (value.uid && layer.uid && value.uid === layer.uid) return true
+      const candidateUrl = normalizeUrl(value.url)
+      return !!candidateUrl && candidateUrl === normalizeUrl(layer.url)
+    }
+
+    /** ObjectID може прийти числом або рядком; поле — з різним регістром. */
+    const fidFromAttributes = (attributes: Record<string, unknown> | undefined) => {
+      if (!attributes) return null
+      const keys = [layer.objectIdField, 'OBJECTID', 'objectid', 'ObjectID', 'FID', 'fid']
+      for (const key of keys) {
+        if (!key) continue
+        const raw = attributes[key]
+        if (raw == null || raw === '') continue
+        const value = typeof raw === 'number' ? raw : Number(raw)
+        if (Number.isFinite(value)) return value
+      }
+      return null
+    }
+
     const handle = view.on('click', (event) => {
       void (async () => {
         try {
-          const response = await view.hitTest(event)
-          const hit = response.results.find((result) => {
-            const graphic = (result as { graphic?: { layer?: unknown } }).graphic
-            return graphic?.layer === layer
-          }) as { graphic?: { attributes?: Record<string, unknown> } } | undefined
-          const fid = hit?.graphic?.attributes?.[layer.objectIdField]
-          if (typeof fid !== 'number') return
-          await revealFromMap(fid)
+          const response = await view.hitTest({ x: event.x, y: event.y })
+          let sawEvidence = false
+          for (const result of response.results) {
+            const graphic = (result as { graphic?: { layer?: unknown; sourceLayer?: unknown; attributes?: Record<string, unknown> } }).graphic
+            const candidate = (result as { layer?: unknown }).layer ?? graphic?.layer ?? graphic?.sourceLayer
+            if (!sameLayer(candidate)) continue
+            sawEvidence = true
+            const fid = fidFromAttributes(graphic?.attributes)
+            if (fid != null) {
+              await revealFromMap(fid)
+              return
+            }
+          }
+          // Шар у hitTest є, але OID не прочитався — не робимо зайвих запитів.
+          if (sawEvidence) return
         } catch {
-          /* hitTest необовʼязковий */
+          /* hitTest необовʼязковий: нижче пробуємо прямий запит */
+        }
+
+        // Резервний шлях: hitTest міг не повернути шар (наприклад, LayerView
+        // призупинений або ще перестворюється). Шукаємо точку в невеликому
+        // екранному боксі з ТИМ САМИМ view-local фільтром завдання.
+        try {
+          const where = await getEvidenceWhere(view, layer)
+          const buffer = 5
+          const topLeft = view.toMap({ x: event.x - buffer, y: event.y - buffer })
+          const bottomRight = view.toMap({ x: event.x + buffer, y: event.y + buffer })
+          if (!topLeft || !bottomRight) return
+          const { default: Extent } = await import('@arcgis/core/geometry/Extent.js')
+          const extent = new Extent({
+            xmin: Math.min(topLeft.x, bottomRight.x),
+            ymin: Math.min(topLeft.y, bottomRight.y),
+            xmax: Math.max(topLeft.x, bottomRight.x),
+            ymax: Math.max(topLeft.y, bottomRight.y),
+            spatialReference: view.spatialReference,
+          })
+          const result = await layer.queryFeatures({
+            geometry: extent,
+            spatialRelationship: 'intersects',
+            where,
+            outFields: [layer.objectIdField],
+            returnGeometry: false,
+            num: 1,
+          })
+          const fid = fidFromAttributes(result.features[0]?.attributes as Record<string, unknown> | undefined)
+          if (fid != null) await revealFromMap(fid)
+        } catch {
+          /* резервний пошук необовʼязковий */
         }
       })()
     })

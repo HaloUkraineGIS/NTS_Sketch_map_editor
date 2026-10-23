@@ -945,3 +945,10 @@
 - Перевірено в браузері на SimpleLineSymbol 0.5/1/2 pt: товщина патча зберігається; `tsc`, `lint`, `build`, `symbols:check` — успішно.
 - Уточнено порядок шарів у Editor: `surveyedLine`, `topoPolygons`, `topoLines`, `topoPoint`.
 - Імʼя JPEG при експорті змінено на `{task_code}-sketch-map.jpg` (напр. `HT_CH_007-sketch-map.jpg`).
+
+## 2026-10-23 — Evidence: відновлено вибір кліком по карті
+- Клік по evidence більше не покладається лише на `graphic.layer === layer`: шар визначається також через `result.layer`/`graphic.sourceLayer`, `id`, `uid` або нормалізований URL. Це покриває випадки, коли hitTest повертає обгортку шару або групу.
+- ObjectID читається з `layer.objectIdField` і типових варіантів (`OBJECTID`, `objectid`, `FID`), числом або рядком; `hitTest` отримує явні `{x, y}`.
+- Якщо `hitTest` не повернув жодного результату evidence (LayerView ще перестворюється/призупинений), додано резервний запит у невеликому екранному боксі з тим самим view-local фільтром завдання (`getEvidenceWhere`).
+- `keyForLayer` додатково розпізнає перейменовані шари, якщо в назві є `evidence` або `surveyed` (точна відповідність і URL мають пріоритет).
+- `tsc`, `lint`, `build` — чисто. Перевірено ізольованим MapView з FeatureLayer, Editor і базовою картою: клік по точці вибирає рядок і підсвічує його. Повний Portal-сценарій без сесії недоступний; потрібна перевірка користувачем у застосунку.
