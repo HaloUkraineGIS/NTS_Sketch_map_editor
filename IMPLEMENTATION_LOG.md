@@ -952,3 +952,9 @@
 - Якщо `hitTest` не повернув жодного результату evidence (LayerView ще перестворюється/призупинений), додано резервний запит у невеликому екранному боксі з тим самим view-local фільтром завдання (`getEvidenceWhere`).
 - `keyForLayer` додатково розпізнає перейменовані шари, якщо в назві є `evidence` або `surveyed` (точна відповідність і URL мають пріоритет).
 - `tsc`, `lint`, `build` — чисто. Перевірено ізольованим MapView з FeatureLayer, Editor і базовою картою: клік по точці вибирає рядок і підсвічує його. Повний Portal-сценарій без сесії недоступний; потрібна перевірка користувачем у застосунку.
+
+## 2026-10-23 — Інсети LM/BM: зайвий World Topo на GitHub Pages
+- Симптом: на localhost інсети LM/BM мають чистий OSM, а на GitHub Pages додатково проступає шар підкладу World Topo.
+- Причина: `Basemap.fromId()` створює обʼєкт підкладу, але його `baseLayers`/`referenceLayers` наповнюються лише після асинхронного `load()`. Якщо `syncBasemapVisibility()` викликався одразу після `map.basemap = ...`, `basemapLayersOf(map)` повертав порожній список — новий підклад не ховався в інсетах. На production-білді таймінг інший, тому це проявлялося саме на GitHub Pages.
+- Виправлення: `setEditBasemap()` став асинхронним і чекає `next.load()`; початковий підклад у `createMapSession()` теж очікує `load()`; `syncBasemapVisibility()` перед збором `basemapLayers` чекає `map.basemap.load()`. Додатково ефект інсетів повторно застосовує політику для вже створених вʼю (гілка `existing` раніше пропускала `sync`).
+- `tsc`, `lint`, `build` — чисто. Потрібна перевірка на GitHub Pages після hard reload (`Ctrl+Shift+R`).

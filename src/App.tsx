@@ -727,7 +727,7 @@ function App() {
     setBasemapId(id)
     try {
       const { setEditBasemap } = await import('./features/basemap/basemap')
-      setEditBasemap(session.map, id)
+      await setEditBasemap(session.map, id)
     } catch (error) {
       setNotice({ kind: 'error', message: describeError(error, 'Не вдалося змінити підклад.') })
       return
@@ -1132,6 +1132,12 @@ function App() {
           }
         }
       }
+      if (!alive) return
+      // Повторно застосовуємо політику і до вже створених інсетів. Ефект
+      // перезапускається при переході на вкладку друку, але гілка `existing`
+      // раніше пропускала sync — і після показу прихованої вкладки LayerView
+      // міг лишитися з усіма підкладами (серед них — World Topo).
+      await syncBasemapPolicy()
     })().catch((error: unknown) => {
       if (alive) setNotice({ kind: 'error', message: describeError(error, 'Не вдалося створити карти LM/BM.') })
     })

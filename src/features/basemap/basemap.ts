@@ -58,10 +58,14 @@ export function allInsetBasemapLayers(sets: InsetBasemapLayers): Layer[] {
 }
 
 /** Підклад вкладки редагування (діє на всю спільну карту). */
-export function setEditBasemap(map: WebMap, id: string): void {
+export async function setEditBasemap(map: WebMap, id: string): Promise<void> {
   const next = Basemap.fromId(id)
   if (!next) throw new Error(`Невідомий підклад: ${id}.`)
   map.basemap = next
+  // `fromId` створює Basemap, але baseLayers/referenceLayers зʼявляються лише
+  // після load. Без очікування syncBasemapVisibility бачить порожні колекції
+  // і не ховає новий підклад в інсетах (там проступає World Topo).
+  await next.load().catch(() => null)
 }
 
 async function setVisibleInView(view: MapView, layer: Layer, visible: boolean): Promise<void> {
@@ -94,6 +98,10 @@ export async function syncBasemapVisibility(args: {
   insetBasemapId: string
 }): Promise<void> {
   const { map, editView, printView, insetViews, insetLayers, insetBasemapId } = args
+  // Колекції шарів підкладу наповнюються асинхронно після `map.basemap = ...`.
+  // Чекаємо load, інакше політика не побачить нові base/reference шари й
+  // залишить їх видимими в інсетах.
+  if (map.basemap) await map.basemap.load().catch(() => null)
   const jobs: Promise<unknown>[] = []
   const basemapLayers = basemapLayersOf(map)
   const insetAll = insetLayers ? allInsetBasemapLayers(insetLayers) : []

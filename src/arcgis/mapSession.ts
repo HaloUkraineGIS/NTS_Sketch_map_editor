@@ -110,7 +110,11 @@ export async function createMapSession(
   // вибір користувача — селектором у вкладці редагування.
   try {
     const initial = Basemap.fromId(DEFAULT_BASEMAP_ID)
-    if (initial) map.basemap = initial
+    if (initial) {
+      map.basemap = initial
+      // Шари підкладу створюються після load; політика інсетів має їх бачити.
+      await initial.load().catch(() => null)
+    }
   } catch {
     /* лишається підклад WebMap */
   }
