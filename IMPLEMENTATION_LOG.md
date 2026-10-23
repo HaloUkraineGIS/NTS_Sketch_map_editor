@@ -958,3 +958,11 @@
 - Причина: `Basemap.fromId()` створює обʼєкт підкладу, але його `baseLayers`/`referenceLayers` наповнюються лише після асинхронного `load()`. Якщо `syncBasemapVisibility()` викликався одразу після `map.basemap = ...`, `basemapLayersOf(map)` повертав порожній список — новий підклад не ховався в інсетах. На production-білді таймінг інший, тому це проявлялося саме на GitHub Pages.
 - Виправлення: `setEditBasemap()` став асинхронним і чекає `next.load()`; початковий підклад у `createMapSession()` теж очікує `load()`; `syncBasemapVisibility()` перед збором `basemapLayers` чекає `map.basemap.load()`. Додатково ефект інсетів повторно застосовує політику для вже створених вʼю (гілка `existing` раніше пропускала `sync`).
 - `tsc`, `lint`, `build` — чисто. Потрібна перевірка на GitHub Pages після hard reload (`Ctrl+Shift+R`).
+
+## 2026-10-23 — Повторне завантаження після помилки dynamic import
+- Симптом: на GitHub Pages інколи зʼявляється `Failed to fetch dynamically imported module: .../assets/mapSession-*.js`.
+- Причина: після нового деплою GitHub Pages старі hashed-чанки можуть зникнути, а відкрита вкладка або кешований `index.html` ще посилається на них. Другий варіант — короткочасний мережевий збій під час лінивого `import()`.
+- Виправлення (`main.tsx`): додано обробник `vite:preloadError`. Перше падіння dynamic import перезавантажує сторінку, щоб отримати свіжий `index.html`; повторне падіння протягом 30 с не зациклює reload, а передається звичайному error-стану. Для сесії використовується `sessionStorage`; якщо сховище недоступне, auto-reload вимкнено.
+- Виправлення (`App.tsx`): технічний текст `Failed to fetch dynamically imported module` замінено зрозумілим повідомленням із порадою оновити сторінку (`Ctrl+F5`).
+- Перевірка: локальний production preview; синтетичний `vite:preloadError` викликає рівно один reload, повторний — не викликає. `tsc`, `lint`, `build` — чисто.
+- Обмеження GitHub Pages: немає можливості виставити `Cache-Control: no-cache` для `index.html`; auto-reload допомагає, але повністю гарантувати свіжий HTML на всіх CDN-вузлах не може. Для повного усунення варто зберігати старі чанки між деплоями або додати service worker.

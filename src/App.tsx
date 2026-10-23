@@ -67,13 +67,19 @@ function defaultPosFor(frame: PrintFrame, defs: InsetDef[], id: string): InsetPo
   return { xMm: INSET_MARGIN_MM, yMm: Math.min(Math.max(0, y), Math.max(0, frame.heightMm - INSET_H_MM)) }
 }
 
+const DYNAMIC_IMPORT_ERROR = /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i
+const DYNAMIC_IMPORT_MESSAGE = 'Не вдалося завантажити частину додатка. Можливо, вийшло оновлення або перервався зв’язок. Оновіть сторінку (Ctrl+F5).'
+
 function describeError(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) return error.message
+  if (error instanceof Error && error.message) {
+    return DYNAMIC_IMPORT_ERROR.test(error.message) ? DYNAMIC_IMPORT_MESSAGE : error.message
+  }
   if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
     const detail = 'details' in error && Array.isArray(error.details)
       ? error.details.filter((item): item is string => typeof item === 'string').join(' ')
       : ''
-    return `${error.message} ${detail}`.trim().replace(/([?&](?:token|access_token)=)[^&\s]+/gi, '$1[redacted]')
+    const message = `${error.message} ${detail}`.trim().replace(/([?&](?:token|access_token)=)[^&\s]+/gi, '$1[redacted]')
+    return DYNAMIC_IMPORT_ERROR.test(message) ? DYNAMIC_IMPORT_MESSAGE : message
   }
   return fallback
 }
