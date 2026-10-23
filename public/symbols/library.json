@@ -149,7 +149,7 @@
       "field": "symbol_code",
       "color": "#000000",
       "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
-      "fill": { "markerSvg": "symbols/topo/forest.svg", "spacingMm": 8, "markerPx": 12, "layout": "grid" }
+      "fill": { "markerSvg": "symbols/topo/forest.svg", "spacingMm": 7, "markerPx": 10, "layout": "grid" }
     },
 
     {
@@ -171,7 +171,7 @@
       "field": "symbol_code",
       "color": "#000000",
       "outline": { "color": "#545454", "width": 0.5, "style": "dot" },
-      "fill": { "markerSvg": "symbols/topo/Cultivation.svg", "spacingMm": 9, "markerPx": 10, "layout": "scatter", "scatter": [{ "dx": 0.22, "dy": 0.28, "rotate": 0 }, { "dx": 0.68, "dy": 0.08, "rotate": 0 }, { "dx": 0.4, "dy": 0.72, "rotate": 0 }] }
+      "fill": { "markerSvg": "symbols/topo/Cultivation.svg", "spacingMm": 9, "markerPx": 7, "layout": "scatter", "scatter": [{ "dx": 0.22, "dy": 0.28, "rotate": 0 }, { "dx": 0.68, "dy": 0.08, "rotate": 0 }, { "dx": 0.4, "dy": 0.72, "rotate": 0 }] }
     },
 
 {
