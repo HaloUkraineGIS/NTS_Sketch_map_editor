@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { INSET_CUSTOM_SCALE_MAX, INSET_CUSTOM_SCALE_MIN, INSET_SCALES } from '../../config'
+import { INSET_CUSTOM_SCALE_MIN, INSET_SCALES } from '../../config'
 
 type Props = {
   label: string
   value: number
   ariaLabel: string
-  hint?: string
   onChange: (scale: number) => void
   onError: (message: string) => void
 }
@@ -16,7 +15,7 @@ const CUSTOM = 'custom'
  * Масштаб інсет-карти: пресети + довільне значення, кратне 1000.
  * Той самий патерн, що в масштабу головної карти («Інший масштаб…» + поле).
  */
-export default function InsetScaleSelect({ label, value, ariaLabel, hint, onChange, onError }: Props) {
+export default function InsetScaleSelect({ label, value, ariaLabel, onChange, onError }: Props) {
   const isPreset = INSET_SCALES.includes(value)
   // Поле вводу — лише за явним вибором «Інший масштаб…», інакше тільки список.
   const [customOpen, setCustomOpen] = useState(false)
@@ -30,12 +29,11 @@ export default function InsetScaleSelect({ label, value, ariaLabel, hint, onChan
   function apply(raw: string) {
     const parsed = Number(raw.trim())
     if (
-      !raw.trim() || !Number.isInteger(parsed) ||
-      parsed < INSET_CUSTOM_SCALE_MIN || parsed > INSET_CUSTOM_SCALE_MAX ||
-      parsed % 1000 !== 0
+      !raw.trim() || !Number.isSafeInteger(parsed) ||
+      parsed < INSET_CUSTOM_SCALE_MIN || parsed % 1000 !== 0
     ) {
       onError(
-        `Масштаб інсета — ціле кратне 1000 від ${INSET_CUSTOM_SCALE_MIN} до ${INSET_CUSTOM_SCALE_MAX} (напр. 12000).`,
+        `Масштаб інсета — ціле кратне 1000, не менше ${INSET_CUSTOM_SCALE_MIN} (напр. 12000 або 150000).`,
       )
       return
     }
@@ -93,7 +91,6 @@ export default function InsetScaleSelect({ label, value, ariaLabel, hint, onChan
           </button>
         </div>
       )}
-      {hint && <small>{hint}</small>}
     </div>
   )
 }

@@ -35,9 +35,8 @@ export const INSET_SCALES = [
   2000, 5000, 7000, 10000, 15000, 20000, 25000, 30000, 35000,
 ]
 
-/** Довільний масштаб інсета: ціле кратне 1000 у цих межах. */
+/** Довільний масштаб інсета: ціле кратне 1000, без верхнього обмеження. */
 export const INSET_CUSTOM_SCALE_MIN = 1000
-export const INSET_CUSTOM_SCALE_MAX = 100000
 
 export const LAYER_ROLES = {
   task: 'filter-parent',

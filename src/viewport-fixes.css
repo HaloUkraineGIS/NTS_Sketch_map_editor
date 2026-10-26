@@ -22,12 +22,37 @@
   overscroll-behavior: contain;
 }
 
+/* Єдиний шрифт підписів у лівій панелі — як у «ОРІЄНТАЦІЯ». */
+.side-panel .task-picker > label,
+.side-panel .control-group > label,
+.side-panel .section-label,
+.side-panel .template-group-label,
+.side-panel .panel-kicker {
+  font-family: 'DM Sans', Arial, sans-serif;
+  font-size: 9px;
+  line-height: 1.2;
+  letter-spacing: .11em;
+  font-weight: 700;
+  color: #6d7d89;
+  text-transform: uppercase;
+}
+
+/* Не даємо кнопці експорту стискатися, коли вміст панелі прокручується. */
+.side-panel .export-button {
+  flex: 0 0 39px;
+  min-height: 39px;
+  white-space: nowrap;
+}
+
 .side-panel .panel-footnote {
   margin-top: 16px;
   flex: 0 0 auto;
 }
 
 .editor-host {
+  /* Calcite за замовчуванням тягне Avenir Next; у панелі має бути той самий
+     DM Sans, що й у решті підписів застосунку. */
+  --calcite-font-family: 'DM Sans', Arial, sans-serif;
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;

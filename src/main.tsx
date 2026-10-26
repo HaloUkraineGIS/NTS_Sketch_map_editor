@@ -5,7 +5,7 @@ import App from './App.tsx'
 
 // Мітка збірки для перевірки свіжості бандла в консолі: __SKETCHMAP_BUILD.
 // Оновлювати при кожному значимому фіксі експорту/рендера.
-;(window as unknown as { __SKETCHMAP_BUILD?: string }).__SKETCHMAP_BUILD = '2026-10-23 preload-retry'
+;(window as unknown as { __SKETCHMAP_BUILD?: string }).__SKETCHMAP_BUILD = '2026-10-26 ui-polish'
 
 const PRELOAD_RETRY_KEY = 'sketchmap:preload-retry-at'
 const PRELOAD_RETRY_COOLDOWN_MS = 30_000

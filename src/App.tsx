@@ -2251,7 +2251,7 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div className="brand-lockup"><div className="brand-mark small">N</div><div><strong>Sketch map</strong><span>Картографічна майстерня</span></div></div>
+        <div className="brand-lockup"><div className="brand-mark small">N</div><div><strong>Sketch map</strong><span>Схематична карта</span></div></div>
         <div className="topbar-right"><span className="portal-status"><i /> ArcGIS Portal</span><span className="user-chip"><span className="avatar">{userName.slice(0, 1).toUpperCase()}</span>{userName}</span><button className="icon-button" title="Вийти" onClick={() => void import('./arcgis/auth').then(({ signOutFromPortal }) => signOutFromPortal())}><LogoutGlyph /></button></div>
       </header>
 
@@ -2299,8 +2299,8 @@ function App() {
             <button className={`grid-toggle${gridVisible ? ' on' : ''}`} onClick={() => setGridVisible((visible) => !visible)} aria-pressed={gridVisible} title="Увімкнути або вимкнути UTM-сітку на листі"><span className="grid-preview"><i/><i/><i/></span><div><strong>UTM-сітка {gridVisible ? 'увімкнена' : 'вимкнена'}</strong><small>1 мм · координати кожні 10 мм</small></div></button>
             <button className={`grid-toggle${insetMove ? ' on' : ''}`} onClick={() => setInsetMove((value) => !value)} aria-pressed={insetMove} title="Розблокувати переміщення карт LM/BM по аркушу (панорамування всередині при цьому вимкнено)"><span className="move-mark"><MoveGlyph /></span><div><strong>Переміщення інсетів {insetMove ? 'увімкнено' : 'вимкнено'}</strong><small>{insetMove ? 'Тягніть карти по аркушу' : 'Тягніть вміст усередині карт'}</small></div></button>
             <InsetScaleSelect label="КАРТА LM" value={insetScales.lm} ariaLabel="Масштаб карти LM" onChange={(value) => setInsetScales((prev) => ({ ...prev, lm: value }))} onError={(message) => setNotice({ kind: 'error', message })} />
-            <InsetScaleSelect label="МАСШТАБ BM-КАРТ" value={insetScales.bm} ariaLabel="Спільний масштаб BM-карт" hint="Один на всі карти BM" onChange={(value) => setInsetScales((prev) => ({ ...prev, bm: value }))} onError={(message) => setNotice({ kind: 'error', message })} />
-            <div className="control-group"><label>Базова карта LM/BM-КАРТ</label><select value={insetBasemapId} onChange={(event) => void changeInsetBasemap(event.target.value)} aria-label="Підклад карт LM/BM">{BASEMAP_OPTIONS.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))}</select><small>Один на всі карти LM/BM</small></div>
+            <InsetScaleSelect label="МАСШТАБ BM-КАРТ" value={insetScales.bm} ariaLabel="Спільний масштаб BM-карт" onChange={(value) => setInsetScales((prev) => ({ ...prev, bm: value }))} onError={(message) => setNotice({ kind: 'error', message })} />
+            <div className="control-group"><label>БАЗОВА КАРТА LM/BM-КАРТ</label><select value={insetBasemapId} onChange={(event) => void changeInsetBasemap(event.target.value)} aria-label="Підклад карт LM/BM">{BASEMAP_OPTIONS.map((option) => (<option key={option.id} value={option.id}>{option.label}</option>))}</select></div>
             <div className="control-group"><label>ПОКАЗУВАТИ НА АРКУШІ BM</label>{insets.some((def) => def.kind === 'bm') ? <div className="inset-checks">{insets.filter((def) => def.kind === 'bm').map((def) => (<label className="inset-check" key={def.id}><input type="checkbox" checked={insetEnabled[def.id] !== false} onChange={() => toggleInset(def.id)} /><span>{def.label}</span></label>))}</div> : <small>{taskCode ? 'BM-точок у завданні нема' : 'Оберіть завдання'}</small>}</div>
             <button className="button button-primary export-button" onClick={() => void exportJpeg()} disabled={!sessionReady || !taskCode || exporting}>{exporting ? <span className="spinner"/> : <DownloadGlyph/>}{exporting ? 'Формування JPEG…' : 'Експортувати в JPEG'}</button>
           </div>
