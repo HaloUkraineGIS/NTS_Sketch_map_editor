@@ -15,7 +15,13 @@ const BAR_Y_MM = 4.4
 const LABEL_Y_MM = 8.8
 const BLOCK_H_MM = 9.6
 const UNIT_GAP_MM = 1
-const UNIT_W_MM = 5
+/**
+ * Ширина підпису «м» (Arial 2 мм ≈ 1.8 мм) із невеликим запасом.
+ * Блок симетричний навколо лінійки: зліва такий самий відступ, як справа
+ * під «м», тому центр лінійки = центр блока = центр рамки.
+ */
+const UNIT_W_MM = 2.2
+const SIDE_PAD_MM = UNIT_GAP_MM + UNIT_W_MM
 
 export type ScaleBarSpec = {
   scale: number
@@ -48,28 +54,29 @@ export function scaleBarSpec(scaleDenominator: number, targetMm = 20): ScaleBarS
     totalMeters,
     segMeters: totalMeters / SEGMENTS,
     barLenMm,
-    blockWMm: barLenMm + UNIT_GAP_MM + UNIT_W_MM,
+    blockWMm: barLenMm + SIDE_PAD_MM * 2,
     blockHMm: BLOCK_H_MM,
   }
 }
 
 export function buildScaleBarSvg(spec: ScaleBarSpec): string {
   const segW = spec.barLenMm / SEGMENTS
+  const barX = SIDE_PAD_MM
   let segs = ''
   for (let i = 0; i < SEGMENTS; i++) {
     const fill = i % 2 === 0 ? '#000000' : '#ffffff'
-    segs += `<rect x="${(i * segW).toFixed(2)}" y="${BAR_Y_MM}" width="${segW.toFixed(2)}" height="${BAR_H_MM}" fill="${fill}" stroke="#000000" stroke-width="0.25"/>`
+    segs += `<rect x="${(barX + i * segW).toFixed(2)}" y="${BAR_Y_MM}" width="${segW.toFixed(2)}" height="${BAR_H_MM}" fill="${fill}" stroke="#000000" stroke-width="0.25"/>`
   }
   let labels = ''
   for (let i = 0; i <= SEGMENTS; i++) {
-    const pos = (i * segW).toFixed(2)
+    const pos = (barX + i * segW).toFixed(2)
     const anchor = i === 0 ? 'start' : i === SEGMENTS ? 'end' : 'middle'
-    const x = i === 0 ? '0' : i === SEGMENTS ? spec.barLenMm.toFixed(2) : pos
+    const x = i === 0 ? barX.toFixed(2) : i === SEGMENTS ? (barX + spec.barLenMm).toFixed(2) : pos
     labels += `<text x="${x}" y="${LABEL_Y_MM}" text-anchor="${anchor}" font-size="${LABEL_FS_MM}" fill="#000000">${formatMeters(i * spec.segMeters)}</text>`
   }
-  const unitX = (spec.barLenMm + UNIT_GAP_MM).toFixed(2)
+  const unitX = (barX + spec.barLenMm + UNIT_GAP_MM).toFixed(2)
   const unitY = (BAR_Y_MM + BAR_H_MM / 2 + LABEL_FS_MM * 0.35).toFixed(2)
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${spec.blockWMm.toFixed(2)} ${spec.blockHMm}" width="${Math.round(spec.blockWMm * 10)}" height="${Math.round(spec.blockHMm * 10)}" font-family="Arial, Helvetica, sans-serif"><rect x="0" y="0" width="${spec.blockWMm.toFixed(2)}" height="${spec.blockHMm}" fill="#ffffff"/><text x="${(spec.barLenMm / 2).toFixed(2)}" y="3.2" text-anchor="middle" font-size="${SCALE_FS_MM}" font-weight="bold" fill="#000000">${spec.scaleText}</text>${segs}${labels}<text x="${unitX}" y="${unitY}" font-size="${LABEL_FS_MM}" fill="#000000">м</text></svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${spec.blockWMm.toFixed(2)} ${spec.blockHMm}" width="${Math.round(spec.blockWMm * 10)}" height="${Math.round(spec.blockHMm * 10)}" font-family="Arial, Helvetica, sans-serif"><rect x="0" y="0" width="${spec.blockWMm.toFixed(2)}" height="${spec.blockHMm}" fill="#ffffff"/><text x="${(spec.blockWMm / 2).toFixed(2)}" y="3.2" text-anchor="middle" font-size="${SCALE_FS_MM}" font-weight="bold" fill="#000000">${spec.scaleText}</text>${segs}${labels}<text x="${unitX}" y="${unitY}" font-size="${LABEL_FS_MM}" fill="#000000">м</text></svg>`
 }
 
 export function scaleBarDataUrl(spec: ScaleBarSpec): string {

@@ -20,6 +20,7 @@ export function drawUtmGrid(
   scaleDenominator: number,
   dpi = 300,
   declutterLabels = false,
+  pixelScale = 1,
 ) {
   const pxPerMm = dpi / 25.4
   const left = frame.leftMm * pxPerMm
@@ -51,7 +52,7 @@ export function drawUtmGrid(
     const major = Math.abs(coordinate / (stepMeters * 10) - Math.round(coordinate / (stepMeters * 10))) < 1e-6
     context.beginPath()
     context.strokeStyle = major ? '#111827' : 'rgba(71, 85, 105, 0.43)'
-    context.lineWidth = major ? 1 : 0.45
+    context.lineWidth = (major ? 1 : 0.45) * pixelScale
     context.moveTo(x, top)
     context.lineTo(x, top + height)
     context.stroke()
@@ -63,7 +64,7 @@ export function drawUtmGrid(
     const major = Math.abs(coordinate / (stepMeters * 10) - Math.round(coordinate / (stepMeters * 10))) < 1e-6
     context.beginPath()
     context.strokeStyle = major ? '#111827' : 'rgba(71, 85, 105, 0.43)'
-    context.lineWidth = major ? 1 : 0.45
+    context.lineWidth = (major ? 1 : 0.45) * pixelScale
     context.moveTo(left, y)
     context.lineTo(left + width, y)
     context.stroke()
@@ -73,7 +74,7 @@ export function drawUtmGrid(
   // Підписи лише зовні: Easting знизу, Northing зліва вертикально, без букв — як на паперовому аркуші.
   context.save()
   context.fillStyle = '#344054'
-  context.font = `${Math.max(7, 2.2 * pxPerMm)}px Inter, Arial, sans-serif`
+  context.font = `${Math.max(7 * pixelScale, 2.2 * pxPerMm)}px Inter, Arial, sans-serif`
   context.textAlign = 'center'
   context.textBaseline = 'middle'
   // У превʼю місця мало: підписи, що накладаються, пропускаємо, крок сітки не чіпаємо.
@@ -86,7 +87,7 @@ export function drawUtmGrid(
     const x = left + ((coordinate - xmin) / (xmax - xmin)) * width
     if (declutter) {
       const textWidth = context.measureText(`${Math.round(coordinate)}`).width
-      if (Math.abs(x - lastLabelX) < textWidth + 8) continue
+      if (Math.abs(x - lastLabelX) < textWidth + 8 * pixelScale) continue
     }
     lastLabelX = x
     context.fillText(`${Math.round(coordinate)}`, x, top + height + GRID_LABEL_ANCHOR_MM * pxPerMm)
@@ -102,7 +103,7 @@ export function drawUtmGrid(
     const text = `${Math.round(coordinate)}`
     if (declutter) {
       const textHeight = context.measureText(text).width
-      if (Math.abs(y - lastLabelY) < textHeight + 6) continue
+      if (Math.abs(y - lastLabelY) < textHeight + 6 * pixelScale) continue
     }
     lastLabelY = y
     context.save()
@@ -115,7 +116,7 @@ export function drawUtmGrid(
   context.restore()
   context.save()
   context.strokeStyle = '#263444'
-  context.lineWidth = 1.2
+  context.lineWidth = 1.2 * pixelScale
   context.strokeRect(left, top, width, height)
   context.restore()
 }

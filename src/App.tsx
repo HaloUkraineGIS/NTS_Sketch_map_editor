@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import type { CSSProperties } from 'react'
 import * as reactiveUtils from '@arcgis/core/core/reactiveUtils.js'
@@ -59,6 +59,27 @@ const frameFor = (orientation: Orientation): PrintFrame => {
 
 /** Запас навколо полігонів завдання, щоб їхні межі не торкались рамки друку. */
 const PRINT_FIT_PADDING = 1.08
+
+/**
+ * Зум перегляду аркуша — суто екранний (CSS transform), не масштаб карти.
+ * 1 = аркуш вписано у вікно; усі налаштування макета лишаються незмінними.
+ */
+const SHEET_ZOOM_STEPS = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5] as const
+const SHEET_ZOOM_MIN = 1
+const SHEET_ZOOM_MAX = 5
+
+function clampSheetZoom(value: number) {
+  if (!Number.isFinite(value)) return SHEET_ZOOM_MIN
+  return Math.min(SHEET_ZOOM_MAX, Math.max(SHEET_ZOOM_MIN, value))
+}
+
+function nextSheetZoom(current: number, direction: 1 | -1) {
+  const epsilon = 1e-4
+  if (direction > 0) {
+    return SHEET_ZOOM_STEPS.find((step) => step > current + epsilon) ?? SHEET_ZOOM_MAX
+  }
+  return [...SHEET_ZOOM_STEPS].reverse().find((step) => step < current - epsilon) ?? SHEET_ZOOM_MIN
+}
 
 /** Дефолтна позиція інсета за порядком у списку: LM перша, BM каскадом униз ліворуч. */
 function defaultPosFor(frame: PrintFrame, defs: InsetDef[], id: string): InsetPos {
@@ -354,6 +375,13 @@ function App() {
   const paperWrapRef = useRef<HTMLDivElement>(null)
   const gridCanvasRef = useRef<HTMLCanvasElement>(null)
   const [paperPx, setPaperPx] = useState({ w: 0, h: 0 })
+  const [sheetZoom, setSheetZoom] = useState(SHEET_ZOOM_MIN)
+  const [sheetPanMode, setSheetPanMode] = useState(false)
+  const [sheetPanning, setSheetPanning] = useState(false)
+  const sheetZoomRef = useRef(sheetZoom)
+  /** Точка аркуша під курсором/центром, яку треба втримати після зуму. */
+  const sheetZoomAnchorRef = useRef<null | { u: number; v: number; x: number; y: number }>(null)
+  useEffect(() => { sheetZoomRef.current = sheetZoom }, [sheetZoom])
   const frame = useMemo(() => frameFor(orientation), [orientation])
   const page = useMemo(() => a4Dimensions(orientation), [orientation])
   // Друкова сторінка завжди має «паперовий» розмір у CSS px при 96 dpi.
@@ -366,6 +394,11 @@ function App() {
   const paperScale = paperPx.w > 0 && paperPx.h > 0
     ? Math.min(paperPx.w / designPx.w, paperPx.h / designPx.h)
     : 1
+  // Зум перегляду множиться на вписування: MapView бачить ті самі design-px,
+  // тому ні масштаб карти, ні сітка, ні експорт від нього не залежать.
+  const viewScale = paperScale * sheetZoom
+  const viewScaleRef = useRef(viewScale)
+  useEffect(() => { viewScaleRef.current = viewScale }, [viewScale])
   const scaleSpec = useMemo(() => scaleBarSpec(scale), [scale])
   const scaleUrl = useMemo(() => scaleBarDataUrl(scaleSpec), [scaleSpec])
   const frameStyle = useMemo(() => ({
@@ -380,9 +413,15 @@ function App() {
     const pageNode = pageRef.current
     const printView = sessionRef.current?.printView
     if (!canvas || !pageNode || !printView?.ready || !taskCode) return
+    // Прев'ю сітки малюємо з запасом роздільності під поточний зум, щоб лінії
+    // та координатні підписи лишались різкими. Експорт має власний 300 dpi.
+    // Зум читаємо з ref, щоб ідентичність paintGrid не змінювалась на кожен
+    // крок колеса і вотчери карти не перепідписувались.
+    const gridScale = Math.min(3, Math.max(1, viewScaleRef.current * (window.devicePixelRatio || 1)))
+    const gridDpi = 96 * gridScale
     // Свіже полотно на кожне малювання: жодних нашарувань принципово.
-    canvas.width = Math.round(page.widthMm * 96 / 25.4)
-    canvas.height = Math.round(page.heightMm * 96 / 25.4)
+    canvas.width = Math.round(page.widthMm * gridDpi / 25.4)
+    canvas.height = Math.round(page.heightMm * gridDpi / 25.4)
     canvas.style.width = '100%'
     canvas.style.height = '100%'
     const context = canvas.getContext('2d')
@@ -397,8 +436,133 @@ function App() {
     if (!center) return
     // Крок беремо з живого масштабу в’ю, а не зі стану: інакше в перехідний
     // момент сітка малюється під цільовий масштаб поверх старої карти.
-    drawUtmGrid(context, frame, { x: center.x, y: center.y }, printView.scale || scale, 96, true)
+    drawUtmGrid(context, frame, { x: center.x, y: center.y }, printView.scale || scale, gridDpi, true, gridScale)
   }, [frame, page, scale, taskCode, zoneWkid, gridVisible])
+
+  // Зум перегляду змінює потрібну роздільність сітки — перемальовуємо окремо,
+  // не чіпаючи підписки на події карти. З дебаунсом: під час колеса зум
+  // змінюється щокадру, а сітка в координатах аркуша не рухається — достатньо
+  // перемалювати її, коли жест завершився.
+  useEffect(() => {
+    const timer = window.setTimeout(() => paintGrid(), 180)
+    return () => window.clearTimeout(timer)
+  }, [paintGrid, viewScale])
+
+  /**
+   * Змінює зум перегляду, зберігаючи точку аркуша під курсором (або центр
+   * вікна) на місці. Сама сторінка не перебудовується — лише transform.
+   */
+  const setSheetZoomAnchored = useCallback((nextRaw: number, anchor?: { clientX: number; clientY: number }) => {
+    const next = clampSheetZoom(nextRaw)
+    if (Math.abs(next - sheetZoomRef.current) < 1e-4) return
+    const wrap = paperWrapRef.current
+    const pageNode = pageRef.current
+    if (wrap && pageNode) {
+      const rect = pageNode.getBoundingClientRect()
+      const wrapRect = wrap.getBoundingClientRect()
+      const x = anchor?.clientX ?? wrapRect.left + wrap.clientWidth / 2
+      const y = anchor?.clientY ?? wrapRect.top + wrap.clientHeight / 2
+      sheetZoomAnchorRef.current = {
+        u: rect.width ? (x - rect.left) / rect.width : 0.5,
+        v: rect.height ? (y - rect.top) / rect.height : 0.5,
+        x,
+        y,
+      }
+    }
+    sheetZoomRef.current = next
+    setSheetZoom(next)
+    // На 100% немає що панорамувати — повертаємо звичайне редагування аркуша.
+    if (next <= SHEET_ZOOM_MIN + 1e-4) setSheetPanMode(false)
+  }, [])
+
+  // Після зміни transform повертаємо точку під курсором на те саме місце.
+  useLayoutEffect(() => {
+    const anchor = sheetZoomAnchorRef.current
+    sheetZoomAnchorRef.current = null
+    const wrap = paperWrapRef.current
+    const pageNode = pageRef.current
+    if (!wrap || !pageNode) return
+    // На 100% аркуш повністю вписаний — скрол не потрібен і має бути нульовим.
+    if (sheetZoom <= SHEET_ZOOM_MIN + 1e-4) {
+      wrap.scrollLeft = 0
+      wrap.scrollTop = 0
+      return
+    }
+    if (!anchor) return
+    const rect = pageNode.getBoundingClientRect()
+    const targetX = rect.left + anchor.u * rect.width
+    const targetY = rect.top + anchor.v * rect.height
+    wrap.scrollLeft += targetX - anchor.x
+    wrap.scrollTop += targetY - anchor.y
+  }, [sheetZoom])
+
+  // Ctrl/Cmd + колесо — зум аркуша; звичайне колесо — скрол збільшеного аркуша.
+  // Карти в макеті не мають зуму колесом, тому перехоплення нічого не ламає.
+  useEffect(() => {
+    const wrap = paperWrapRef.current
+    if (!wrap) return
+    const onWheel = (event: WheelEvent) => {
+      if (tabRef.current !== 'print') return
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? wrap.clientHeight : 1
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault()
+        // deltaMode 2 (сторінки) дає ±1 за подію — нормалізуємо, щоб зум не стрибав.
+        const delta = event.deltaMode === 0 ? event.deltaY : event.deltaY * (event.deltaMode === 1 ? 16 : 400)
+        const factor = Math.min(1.25, Math.max(0.8, Math.exp(-delta * 0.0015)))
+        setSheetZoomAnchored(sheetZoomRef.current * factor, { clientX: event.clientX, clientY: event.clientY })
+        return
+      }
+      const canScroll = wrap.scrollHeight > wrap.clientHeight + 1 || wrap.scrollWidth > wrap.clientWidth + 1
+      if (!canScroll) return
+      event.preventDefault()
+      wrap.scrollTop += event.deltaY * unit
+      wrap.scrollLeft += event.deltaX * unit
+    }
+    wrap.addEventListener('wheel', onWheel, { passive: false, capture: true })
+    return () => wrap.removeEventListener('wheel', onWheel, { capture: true } as EventListenerOptions)
+  }, [setSheetZoomAnchored])
+
+  // Режим «рука»: перехоплює вказівник у capture-фазі, тому ні Esri-карта,
+  // ні drag легенди/інсетів не бачать події — налаштування аркуша захищені.
+  useEffect(() => {
+    const wrap = paperWrapRef.current
+    if (!wrap || !sheetPanMode) return
+    let pan: null | { pointerId: number; x: number; y: number; left: number; top: number } = null
+    const finish = (event: PointerEvent) => {
+      if (!pan || event.pointerId !== pan.pointerId) return
+      pan = null
+      setSheetPanning(false)
+      document.body.style.userSelect = ''
+      if (wrap.hasPointerCapture(event.pointerId)) wrap.releasePointerCapture(event.pointerId)
+    }
+    const onDown = (event: PointerEvent) => {
+      if (event.button !== 0 || event.pointerType === 'touch') return
+      event.preventDefault()
+      event.stopPropagation()
+      pan = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: wrap.scrollLeft, top: wrap.scrollTop }
+      wrap.setPointerCapture(event.pointerId)
+      setSheetPanning(true)
+      document.body.style.userSelect = 'none'
+    }
+    const onMove = (event: PointerEvent) => {
+      if (!pan || event.pointerId !== pan.pointerId) return
+      event.preventDefault()
+      wrap.scrollLeft = pan.left - (event.clientX - pan.x)
+      wrap.scrollTop = pan.top - (event.clientY - pan.y)
+    }
+    wrap.addEventListener('pointerdown', onDown, { capture: true })
+    wrap.addEventListener('pointermove', onMove, { capture: true })
+    wrap.addEventListener('pointerup', finish, { capture: true })
+    wrap.addEventListener('pointercancel', finish, { capture: true })
+    return () => {
+      wrap.removeEventListener('pointerdown', onDown, { capture: true } as EventListenerOptions)
+      wrap.removeEventListener('pointermove', onMove, { capture: true } as EventListenerOptions)
+      wrap.removeEventListener('pointerup', finish, { capture: true } as EventListenerOptions)
+      wrap.removeEventListener('pointercancel', finish, { capture: true } as EventListenerOptions)
+      setSheetPanning(false)
+      document.body.style.userSelect = ''
+    }
+  }, [sheetPanMode])
 
   useEffect(() => {
     let mounted = true
@@ -1166,7 +1330,10 @@ function App() {
     let retries = 0
     const fit = () => {
       const availW = wrap.clientWidth
-      const availH = wrap.clientHeight
+      // Висоту беремо з border-box: при зумі зʼявляється горизонтальний
+      // скролбар і clientHeight меншає на його висоту. Через це базовий
+      // вписувальний масштаб «стрибав» би під час зуму.
+      const availH = wrap.offsetHeight
       if (!availW || !availH) {
         // Монтування до розкладки: пробуємо ще кілька кадрів, інакше
         // сторінка лишається на CSS-фолбеку без JS-розміру і її гне.
@@ -1193,6 +1360,14 @@ function App() {
     observer.observe(wrap)
     return () => observer.disconnect()
   }, [page, tab])
+
+  // Зміна орієнтації повертає аркуш до початку скролу (зум скидає changeOrientation).
+  useEffect(() => {
+    const wrap = paperWrapRef.current
+    if (!wrap) return
+    wrap.scrollLeft = 0
+    wrap.scrollTop = 0
+  }, [orientation])
 
   // Комбінована легенда макета: evidence + task-шари (живий renderer) + топошари в межах кадру.
   // Оновлюється при зміні завдання, правках, русі/масштабі/зоні друкованої карти.
@@ -1939,6 +2114,10 @@ function App() {
 
   function changeOrientation(next: Orientation) {
     setOrientation(next)
+    setSheetZoom(SHEET_ZOOM_MIN)
+    sheetZoomRef.current = SHEET_ZOOM_MIN
+    setSheetPanMode(false)
+    setSheetPanning(false)
     setLegendBox(null)
     setNorthPos(null)
     setLogoPos(null)
@@ -2325,9 +2504,9 @@ function App() {
             )}
           </div>
           <div className={`map-pane print-map ${tab === 'print' ? 'pane-visible' : ''}`}>
-            <div ref={paperWrapRef} className={`paper-wrap ${orientation}`}>
-              <div className="paper-scale" style={{ width: paperPx.w || designPx.w, height: paperPx.h || designPx.h, visibility: paperPx.w > 0 ? undefined : 'hidden' }}>
-                <div ref={pageRef} className={`print-page ${orientation}`} style={{ width: designPx.w, height: designPx.h, maxWidth: 'none', maxHeight: 'none', transform: `scale(${paperScale})`, transformOrigin: 'top left' }}>
+            <div ref={paperWrapRef} className={`paper-wrap ${orientation}${sheetPanMode ? ' sheet-pan' : ''}${sheetPanning ? ' panning' : ''}`}>
+              <div className="paper-scale" style={{ width: designPx.w * viewScale, height: designPx.h * viewScale, visibility: paperPx.w > 0 ? undefined : 'hidden' }}>
+                <div ref={pageRef} className={`print-page ${orientation}`} style={{ width: designPx.w, height: designPx.h, maxWidth: 'none', maxHeight: 'none', transform: `scale(${viewScale})`, transformOrigin: 'top left' }}>
                   <div className="print-map-frame" ref={frameNodeRef} style={frameStyle}><div className="map-canvas" ref={printMapRef}/><img
   src={`${import.meta.env.BASE_URL}${NORTH_ARROW_SRC}`}
   alt="Північ"
@@ -2462,6 +2641,38 @@ function App() {
                 </div>
               </div>
             </div>
+            <div className="sheet-zoom-controls" role="group" aria-label="Масштаб перегляду аркуша">
+              <button
+                type="button"
+                className={`sheet-zoom-hand${sheetPanMode ? ' on' : ''}`}
+                onClick={() => setSheetPanMode((value) => !value)}
+                aria-pressed={sheetPanMode}
+                title={sheetPanMode ? 'Режим перегляду: вимкнути (аркуш знову можна редагувати)' : 'Режим перегляду: тягніть аркуш мишкою'}
+                aria-label={sheetPanMode ? 'Вимкнути режим перегляду' : 'Увімкнути режим перегляду'}
+              ><HandGlyph /></button>
+              <span className="sheet-zoom-divider" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={() => setSheetZoomAnchored(nextSheetZoom(sheetZoom, -1))}
+                disabled={sheetZoom <= SHEET_ZOOM_MIN + 1e-4}
+                title="Зменшити масштаб перегляду"
+                aria-label="Зменшити масштаб перегляду"
+              >−</button>
+              <button
+                type="button"
+                className="sheet-zoom-value"
+                onClick={() => setSheetZoomAnchored(SHEET_ZOOM_MIN)}
+                title="Вписати аркуш у вікно (100%)"
+                aria-label={`Масштаб перегляду ${Math.round(sheetZoom * 100)} відсотків. Вписати аркуш у вікно`}
+              >{Math.round(sheetZoom * 100)}%</button>
+              <button
+                type="button"
+                onClick={() => setSheetZoomAnchored(nextSheetZoom(sheetZoom, 1))}
+                disabled={sheetZoom >= SHEET_ZOOM_MAX - 1e-4}
+                title="Збільшити масштаб перегляду"
+                aria-label="Збільшити масштаб перегляду"
+              >+</button>
+            </div>
           </div>
         </div>
       </section>
@@ -2471,6 +2682,7 @@ function App() {
 
 function PortalGlyph() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M5.64 5.64l12.72 12.72m0-12.72L5.64 18.36"/><circle cx="12" cy="12" r="8"/></svg> }
 function MoveGlyph() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg> }
+function HandGlyph() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 11V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5V4.5a1.5 1.5 0 0 1 3 0V11m0-2.5a1.5 1.5 0 0 1 3 0V12m0-1a1.5 1.5 0 0 1 3 0v5a5 5 0 0 1-5 5h-2.2a5 5 0 0 1-4.3-2.5L5 15.5a1.6 1.6 0 0 1 2.6-1.8L9 15"/></svg> }
 function EditGlyph() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5 5 5M4 20l4.2-.8L19 8.4a2.1 2.1 0 0 0-3-3L5.2 16.2 4 20Z"/><path d="M13 20h7"/></svg> }
 function PrintGlyph() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v7H7z"/><path d="M18 12h.01"/></svg> }
 function LogoutGlyph() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg> }

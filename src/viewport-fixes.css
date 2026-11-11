@@ -140,8 +140,10 @@
   box-shadow: none;
 }
 
+/* Верхня смуга під панель зуму перегляду: вона не перекриває аркуш
+   (легенда, штамп і стрілка півночі лишаються видимими повністю). */
 .mode-print .paper-wrap {
-  inset: 14px;
+  inset: 52px 14px 14px;
 }
 .panel-block {
   display: contents;
@@ -741,11 +743,26 @@
 /* Друк: сторінка має фіксований 96-dpi розмір, а до вікна вписується через
    transform. MapView усередині бачить ті самі px, що й фізичні мм кадру, тому
    UTM-сітка, масштабна лінійка та JPEG не залежать від розміру вікна. */
+.paper-wrap {
+  /* Зум перегляду: аркуш може бути більшим за вікно — даємо скрол.
+     stable-gutter тримає ширину незмінною, коли скролбари зʼявляються. */
+  overflow: auto;
+  scrollbar-gutter: stable;
+  /* Коли аркуш більший за вікно, він має починатися з лівого/верхнього краю,
+     а не центруватися з обрізаним початком. Центрування при 100% робить
+     margin: auto у .paper-scale. */
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
 .paper-wrap > .paper-scale {
   position: relative;
   flex: 0 0 auto;
   min-width: 0;
   min-height: 0;
+  /* auto-поля центрують аркуш, коли він менший за вікно, і не зрізають
+     початок, коли більший (на відміну від justify-content: center). */
+  margin: auto;
 }
 .paper-scale > .print-page {
   position: absolute;
@@ -760,4 +777,86 @@
 .paper-scale .print-map-frame {
   border: 0;
   box-shadow: inset 0 0 0 1px #293c4b;
+}
+
+/* Панель зуму перегляду: поза .print-page і поза аркушем (у верхній смузі
+   .map-pane), тому не перекриває макет і не потрапляє в JPEG. */
+.sheet-zoom-controls {
+  position: absolute;
+  right: 14px;
+  top: 8px;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid #d8e0e5;
+  border-radius: 10px;
+  background: #fffffff2;
+  box-shadow: 0 6px 18px #16304a26;
+  backdrop-filter: blur(4px);
+}
+
+.sheet-zoom-controls button {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #42586a;
+  font: 600 13px/1 'DM Sans', Arial, sans-serif;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.sheet-zoom-controls button:hover:not(:disabled) {
+  background: #eef4f5;
+  color: #1b5864;
+}
+
+.sheet-zoom-controls button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.sheet-zoom-controls .sheet-zoom-value {
+  min-width: 52px;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+.sheet-zoom-controls .sheet-zoom-hand.on {
+  background: #e4f0ef;
+  color: #176a69;
+}
+
+.sheet-zoom-controls svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sheet-zoom-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: #e2e8ed;
+}
+
+/* Режим «рука»: увесь аркуш — одна поверхня для панорамування. */
+.paper-wrap.sheet-pan,
+.paper-wrap.sheet-pan * {
+  cursor: grab !important;
+  user-select: none;
+}
+
+.paper-wrap.sheet-pan.panning,
+.paper-wrap.sheet-pan.panning * {
+  cursor: grabbing !important;
 }

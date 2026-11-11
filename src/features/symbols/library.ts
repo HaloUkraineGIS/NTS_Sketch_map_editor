@@ -1374,7 +1374,11 @@ function drawLinePattern(
       default: return []
     }
   }
-  for (const stroke of strokes) {
+  // CIM малює ПЕРШИЙ шар зверху. Для знака з каймою (канал: синя 3 pt
+  // поверх чорної 4 pt) порядок критичний: якщо фарбувати в порядку масиву,
+  // остання широка обводка повністю закриває першу. Тому фарбуємо з кінця —
+  // тоді верхньою лишається перша обводка, як на карті.
+  for (const stroke of [...strokes].reverse()) {
     context.strokeStyle = stroke.color ?? entry.color ?? '#555555'
     context.lineWidth = Math.max(3, (stroke.width ?? 2) * widthScale)
     context.setLineDash(dashOf(stroke))

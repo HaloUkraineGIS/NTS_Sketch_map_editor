@@ -209,7 +209,7 @@
 
 {
           "code": "TOPO_GRAZING",
-      "name": "Пасовище",
+      "name": "Трав'яна рослинність",
       "geometry": "polygon",
       "layers": ["topoPolygons"],
       "field": "symbol_code",
@@ -301,6 +301,18 @@
       "stroke": { "color": "#0271b5", "width": 3, "style": "solid" },
       "pattern": {
         "strokes": [{ "color": "#0271b5", "width": 3}]
+      }
+    },
+    {
+      "code": "TOPO_CANAL",
+      "name": "Канал",
+      "geometry": "line",
+      "layers": ["topoLines"],
+      "field": "symbol_code",
+      "color": "#03a9fc",
+      "stroke": { "color": "#03a9fc", "width": 3, "style": "solid" },
+      "pattern": {
+        "strokes": [{ "color": "#03a9fc", "width": 3}, { "color": "#0a0a0a", "width": 4}]
       }
     },
     {
